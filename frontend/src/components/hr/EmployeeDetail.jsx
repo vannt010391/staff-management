@@ -300,39 +300,39 @@ export default function EmployeeDetail({ employeeId, onClose }) {
                 <div className="text-center py-12 text-gray-500">No evaluations found</div>
               ) : (
                 <div className="grid grid-cols-1 gap-4">
-                  {evaluations.map((eval) => (
-                    <div key={eval.id} className="bg-white border border-gray-200 rounded-xl p-6 hover:shadow-lg transition-shadow">
+                  {evaluations.map((evaluation) => (
+                    <div key={evaluation.id} className="bg-white border border-gray-200 rounded-xl p-6 hover:shadow-lg transition-shadow">
                       <div className="flex items-center justify-between mb-4">
                         <div>
                           <p className="font-semibold text-gray-900">
-                            {formatDate(eval.period_start)} - {formatDate(eval.period_end)}
+                            {formatDate(evaluation.period_start)} - {formatDate(evaluation.period_end)}
                           </p>
-                          <p className="text-sm text-gray-600">{eval.period_type} Evaluation</p>
-                          <p className="text-sm text-gray-600">Evaluator: {eval.evaluator_details?.username}</p>
+                          <p className="text-sm text-gray-600">{evaluation.period_type} Evaluation</p>
+                          <p className="text-sm text-gray-600">Evaluator: {evaluation.evaluator_details?.username}</p>
                         </div>
-                        <span className={`px-4 py-2 rounded-lg text-sm font-medium ${getRatingColor(eval.overall_rating)}`}>
-                          {eval.overall_rating}
+                        <span className={`px-4 py-2 rounded-lg text-sm font-medium ${getRatingColor(evaluation.overall_rating)}`}>
+                          {evaluation.overall_rating}
                         </span>
                       </div>
                       <div className="space-y-3">
                         <div>
                           <p className="text-sm font-medium text-gray-700">Strengths:</p>
-                          <p className="text-sm text-gray-600">{eval.strengths}</p>
+                          <p className="text-sm text-gray-600">{evaluation.strengths}</p>
                         </div>
                         <div>
                           <p className="text-sm font-medium text-gray-700">Areas for Improvement:</p>
-                          <p className="text-sm text-gray-600">{eval.areas_for_improvement}</p>
+                          <p className="text-sm text-gray-600">{evaluation.areas_for_improvement}</p>
                         </div>
-                        {(eval.promotion_recommended || eval.salary_increase_recommended) && (
+                        {(evaluation.promotion_recommended || evaluation.salary_increase_recommended) && (
                           <div className="flex gap-2 pt-3 border-t border-gray-200">
-                            {eval.promotion_recommended && (
+                            {evaluation.promotion_recommended && (
                               <span className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-medium">
                                 Promotion Recommended
                               </span>
                             )}
-                            {eval.salary_increase_recommended && (
+                            {evaluation.salary_increase_recommended && (
                               <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">
-                                Salary Increase: {eval.recommended_increase_percentage}%
+                                Salary Increase: {evaluation.recommended_increase_percentage}%
                               </span>
                             )}
                           </div>
