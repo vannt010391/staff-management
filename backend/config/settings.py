@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'notifications',
     'analytics',
     'hr',
+    'crm',
 ]
 
 MIDDLEWARE = [

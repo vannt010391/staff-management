@@ -10,6 +10,7 @@ class TaskFileSerializer(serializers.ModelSerializer):
         source='uploaded_by.username',
         read_only=True
     )
+    uploaded_by_full_name = serializers.SerializerMethodField()
     file_type_display = serializers.CharField(
         source='get_file_type_display',
         read_only=True
@@ -21,7 +22,7 @@ class TaskFileSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'task', 'file', 'file_url', 'file_type', 'file_type_display',
             'filename', 'file_size', 'comment',
-            'uploaded_by', 'uploaded_by_username', 'uploaded_at'
+            'uploaded_by', 'uploaded_by_username', 'uploaded_by_full_name', 'uploaded_at'
         ]
         read_only_fields = ['id', 'uploaded_by', 'uploaded_at', 'file_size', 'filename']
 
@@ -42,11 +43,20 @@ class TaskFileSerializer(serializers.ModelSerializer):
         validated_data['uploaded_by'] = self.context['request'].user
         return super().create(validated_data)
 
+    def get_uploaded_by_full_name(self, obj):
+        if not obj.uploaded_by:
+            return None
+        return obj.uploaded_by.get_full_name() or obj.uploaded_by.username
+
 
 class TaskCommentSerializer(serializers.ModelSerializer):
     """Serializer for TaskComment model"""
     user_username = serializers.CharField(source='user.username', read_only=True)
+    user_full_name = serializers.SerializerMethodField()
     user_role = serializers.CharField(source='user.role', read_only=True)
+    design_rule_name = serializers.CharField(source='design_rule.name', read_only=True)
+    pass_fail_display = serializers.SerializerMethodField()
+    attachment_url = serializers.SerializerMethodField()
     replies = serializers.SerializerMethodField()
     is_reply = serializers.BooleanField(read_only=True)
 
@@ -54,10 +64,26 @@ class TaskCommentSerializer(serializers.ModelSerializer):
         model = TaskComment
         fields = [
             'id', 'task', 'user', 'user_username', 'user_role',
-            'comment', 'parent', 'is_reply', 'replies',
+            'user_full_name', 'comment', 'parent', 'is_reply', 'replies',
+            'design_rule', 'design_rule_name', 'is_passed', 'pass_fail_display',
+            'attachment', 'attachment_url',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'user', 'created_at', 'updated_at']
+
+    def validate(self, attrs):
+        task = attrs.get('task') or getattr(self.instance, 'task', None)
+        design_rule = attrs.get('design_rule')
+
+        if design_rule and task and design_rule.project_id != task.project_id:
+            raise serializers.ValidationError('Design rule must belong to the same project as task.')
+
+        return attrs
+
+    def create(self, validated_data):
+        if not validated_data.get('comment') and not validated_data.get('attachment'):
+            raise serializers.ValidationError('Either comment text or attachment is required.')
+        return super().create(validated_data)
 
     def get_replies(self, obj):
         """Get nested replies"""
@@ -69,6 +95,24 @@ class TaskCommentSerializer(serializers.ModelSerializer):
             ).data
         return []
 
+    def get_user_full_name(self, obj):
+        if not obj.user:
+            return None
+        return obj.user.get_full_name() or obj.user.username
+
+    def get_pass_fail_display(self, obj):
+        if obj.is_passed is True:
+            return 'pass'
+        if obj.is_passed is False:
+            return 'failed'
+        return None
+
+    def get_attachment_url(self, obj):
+        request = self.context.get('request')
+        if obj.attachment and request:
+            return request.build_absolute_uri(obj.attachment.url)
+        return None
+
 
 class TaskListSerializer(serializers.ModelSerializer):
     """Serializer for listing tasks"""
@@ -78,26 +122,58 @@ class TaskListSerializer(serializers.ModelSerializer):
         source='assigned_to.username',
         read_only=True
     )
+    assigned_to_full_name = serializers.SerializerMethodField()
     assigned_by_username = serializers.CharField(
         source='assigned_by.username',
         read_only=True
     )
+    reviewer_username = serializers.CharField(
+        source='reviewer.username',
+        read_only=True
+    )
+    reviewer_full_name = serializers.SerializerMethodField()
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     priority_display = serializers.CharField(source='get_priority_display', read_only=True)
     is_overdue = serializers.BooleanField(read_only=True)
+    freelancer_earning = serializers.SerializerMethodField()
+    resource_count = serializers.SerializerMethodField()
+    upload_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Task
         fields = [
             'id', 'title', 'description',
             'project', 'project_name', 'topic', 'topic_name',
-            'assigned_to', 'assigned_to_username',
+            'assigned_to', 'assigned_to_username', 'assigned_to_full_name',
             'assigned_by', 'assigned_by_username',
+            'reviewer', 'reviewer_username', 'reviewer_full_name',
             'status', 'status_display', 'priority', 'priority_display',
-            'price', 'due_date', 'is_overdue',
+            'price', 'due_date', 'is_overdue', 'freelancer_earning',
+            'resource_count', 'upload_count',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'assigned_by', 'created_at', 'updated_at']
+
+    def get_assigned_to_full_name(self, obj):
+        if not obj.assigned_to:
+            return None
+        return obj.assigned_to.get_full_name() or obj.assigned_to.username
+
+    def get_freelancer_earning(self, obj):
+        if obj.assigned_to and obj.status in ['approved', 'completed'] and obj.price is not None:
+            return obj.price
+        return 0
+
+    def get_reviewer_full_name(self, obj):
+        if not obj.reviewer:
+            return None
+        return obj.reviewer.get_full_name() or obj.reviewer.username
+
+    def get_resource_count(self, obj):
+        return obj.files.filter(file_type='reference').count()
+
+    def get_upload_count(self, obj):
+        return obj.files.exclude(file_type='reference').count()
 
 
 class TaskDetailSerializer(serializers.ModelSerializer):
@@ -108,28 +184,38 @@ class TaskDetailSerializer(serializers.ModelSerializer):
         source='assigned_to.username',
         read_only=True
     )
+    assigned_to_full_name = serializers.SerializerMethodField()
     assigned_by_username = serializers.CharField(
         source='assigned_by.username',
         read_only=True
     )
+    reviewer_username = serializers.CharField(
+        source='reviewer.username',
+        read_only=True
+    )
+    reviewer_full_name = serializers.SerializerMethodField()
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     priority_display = serializers.CharField(source='get_priority_display', read_only=True)
     design_rules = DesignRuleSerializer(many=True, read_only=True)
     files = TaskFileSerializer(many=True, read_only=True)
     comments = serializers.SerializerMethodField()
     is_overdue = serializers.BooleanField(read_only=True)
+    freelancer_earning = serializers.SerializerMethodField()
+    resources = serializers.SerializerMethodField()
+    uploads = serializers.SerializerMethodField()
 
     class Meta:
         model = Task
         fields = [
             'id', 'title', 'description',
             'project', 'project_name', 'topic', 'topic_name',
-            'assigned_to', 'assigned_to_username',
+            'assigned_to', 'assigned_to_username', 'assigned_to_full_name',
             'assigned_by', 'assigned_by_username',
+            'reviewer', 'reviewer_username', 'reviewer_full_name',
             'status', 'status_display', 'priority', 'priority_display',
-            'price', 'due_date', 'is_overdue',
+            'price', 'due_date', 'is_overdue', 'freelancer_earning',
             'started_at', 'completed_at',
-            'design_rules', 'files', 'comments',
+            'design_rules', 'files', 'resources', 'uploads', 'comments',
             'created_at', 'updated_at'
         ]
         read_only_fields = [
@@ -146,6 +232,29 @@ class TaskDetailSerializer(serializers.ModelSerializer):
             context=self.context
         ).data
 
+    def get_assigned_to_full_name(self, obj):
+        if not obj.assigned_to:
+            return None
+        return obj.assigned_to.get_full_name() or obj.assigned_to.username
+
+    def get_freelancer_earning(self, obj):
+        if obj.assigned_to and obj.status in ['approved', 'completed'] and obj.price is not None:
+            return obj.price
+        return 0
+
+    def get_reviewer_full_name(self, obj):
+        if not obj.reviewer:
+            return None
+        return obj.reviewer.get_full_name() or obj.reviewer.username
+
+    def get_resources(self, obj):
+        queryset = obj.files.filter(file_type='reference')
+        return TaskFileSerializer(queryset, many=True, context=self.context).data
+
+    def get_uploads(self, obj):
+        queryset = obj.files.exclude(file_type='reference')
+        return TaskFileSerializer(queryset, many=True, context=self.context).data
+
 
 class TaskCreateUpdateSerializer(serializers.ModelSerializer):
     """Serializer for creating/updating tasks"""
@@ -159,13 +268,18 @@ class TaskCreateUpdateSerializer(serializers.ModelSerializer):
         model = Task
         fields = [
             'title', 'description', 'project', 'topic',
-            'assigned_to', 'status', 'priority', 'price', 'due_date',
+            'assigned_to', 'reviewer', 'status', 'priority', 'price', 'due_date',
             'design_rule_ids'
         ]
 
+    def validate_reviewer(self, value):
+        if value and value.role not in ['admin', 'manager', 'team_lead', 'staff'] and not value.is_superuser:
+            raise serializers.ValidationError('Reviewer must be admin, manager, team lead, or staff.')
+        return value
+
     def validate_price(self, value):
-        """Validate price is positive"""
-        if value < 0:
+        """Validate price is positive if provided"""
+        if value is not None and value < 0:
             raise serializers.ValidationError("Price must be positive.")
         return value
 
@@ -237,3 +351,24 @@ class TaskStatusChangeSerializer(serializers.Serializer):
     """Serializer for changing task status"""
     status = serializers.ChoiceField(choices=Task.STATUS_CHOICES, required=True)
     comment = serializers.CharField(required=False, allow_blank=True)
+
+
+class TaskReviewerAssignSerializer(serializers.Serializer):
+    """Serializer for assigning reviewer to a task"""
+    reviewer = serializers.IntegerField(required=False, allow_null=True)
+
+    def validate_reviewer(self, value):
+        if value in [None, '']:
+            return None
+
+        from accounts.models import User
+
+        try:
+            reviewer = User.objects.get(id=value)
+        except User.DoesNotExist:
+            raise serializers.ValidationError('Reviewer not found.')
+
+        if reviewer.role not in ['admin', 'manager', 'team_lead', 'staff'] and not reviewer.is_superuser:
+            raise serializers.ValidationError('Reviewer must be admin, manager, team lead, or staff.')
+
+        return value

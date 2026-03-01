@@ -2,7 +2,8 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
     DepartmentViewSet, CareerPathViewSet, EmployeeViewSet,
-    KPIViewSet, EvaluationViewSet, SalaryReviewViewSet, PersonalReportViewSet
+    KPIViewSet, EvaluationViewSet, SalaryReviewViewSet, PersonalReportViewSet,
+    PlanViewSet, PlanGoalViewSet, PlanNoteViewSet
 )
 
 router = DefaultRouter()
@@ -13,6 +14,9 @@ router.register(r'kpis', KPIViewSet, basename='kpi')
 router.register(r'evaluations', EvaluationViewSet, basename='evaluation')
 router.register(r'salary-reviews', SalaryReviewViewSet, basename='salaryreview')
 router.register(r'reports', PersonalReportViewSet, basename='personalreport')
+router.register(r'plans', PlanViewSet, basename='plan')
+router.register(r'plan-goals', PlanGoalViewSet, basename='plan-goal')
+router.register(r'plan-notes', PlanNoteViewSet, basename='plan-note')
 
 urlpatterns = [
     path('', include(router.urls)),

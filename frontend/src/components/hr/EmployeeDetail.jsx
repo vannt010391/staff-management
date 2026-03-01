@@ -3,6 +3,7 @@ import { X, Mail, Phone, Calendar, DollarSign, Award, TrendingUp, FileText, BarC
 import axios from 'axios';
 import { API_BASE_URL } from '../../constants';
 import { toast } from 'sonner';
+import { formatCurrency } from '../../utils/helpers';
 
 export default function EmployeeDetail({ employeeId, onClose }) {
   const [loading, setLoading] = useState(true);
@@ -199,8 +200,7 @@ export default function EmployeeDetail({ employeeId, onClose }) {
                     </div>
                     <p className="text-gray-700 font-medium">{employee.career_path_details?.title}</p>
                     <p className="text-sm text-gray-600">
-                      Salary Range: ${parseFloat(employee.career_path_details?.min_salary).toLocaleString()} -
-                      ${parseFloat(employee.career_path_details?.max_salary).toLocaleString()}
+                      Salary Range: {formatCurrency(Number(employee.career_path_details?.min_salary || 0))} - {formatCurrency(Number(employee.career_path_details?.max_salary || 0))}
                     </p>
                   </div>
                 </div>
@@ -211,7 +211,7 @@ export default function EmployeeDetail({ employeeId, onClose }) {
                     <div className="flex items-center gap-2">
                       <DollarSign className="h-5 w-5 text-yellow-600" />
                       <span className="text-3xl font-bold text-yellow-600">
-                        ${parseFloat(employee.current_salary).toLocaleString()}
+                        {formatCurrency(Number(employee.current_salary || 0))}
                       </span>
                     </div>
                     <p className="text-sm text-gray-600">Annual compensation</p>
@@ -372,11 +372,11 @@ export default function EmployeeDetail({ employeeId, onClose }) {
                       <div className="grid grid-cols-3 gap-4 mb-4">
                         <div>
                           <p className="text-sm text-gray-600">Current Salary</p>
-                          <p className="text-lg font-semibold text-gray-900">${parseFloat(review.current_salary).toLocaleString()}</p>
+                          <p className="text-lg font-semibold text-gray-900">{formatCurrency(Number(review.current_salary || 0))}</p>
                         </div>
                         <div>
                           <p className="text-sm text-gray-600">Proposed Salary</p>
-                          <p className="text-lg font-semibold text-green-600">${parseFloat(review.proposed_salary).toLocaleString()}</p>
+                          <p className="text-lg font-semibold text-green-600">{formatCurrency(Number(review.proposed_salary || 0))}</p>
                         </div>
                         <div>
                           <p className="text-sm text-gray-600">Increase</p>

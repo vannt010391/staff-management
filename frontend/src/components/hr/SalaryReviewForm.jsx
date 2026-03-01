@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import axios from 'axios';
 import { API_BASE_URL } from '../../constants';
 import { toast } from 'sonner';
+import { formatCurrency } from '../../utils/helpers';
 
 export default function SalaryReviewForm({ review = null, onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
@@ -86,7 +87,7 @@ export default function SalaryReviewForm({ review = null, onClose, onSuccess }) 
       });
 
       toast.success(`Salary review ${review ? 'updated' : 'created'} successfully`);
-      onSuccess();
+      await onSuccess();
       onClose();
     } catch (error) {
       console.error('Error saving salary review:', error);
@@ -135,7 +136,7 @@ export default function SalaryReviewForm({ review = null, onClose, onSuccess }) 
               <option value="">Select Employee</option>
               {employees.map(emp => (
                 <option key={emp.id} value={emp.id}>
-                  {emp.user_details?.full_name || emp.user_details?.username} ({emp.employee_id}) - Current: ${parseFloat(emp.current_salary).toLocaleString()}
+                  {emp.user_details?.full_name || emp.user_details?.username} ({emp.employee_id}) - Current: {formatCurrency(Number(emp.current_salary || 0))}
                 </option>
               ))}
             </select>
@@ -157,7 +158,7 @@ export default function SalaryReviewForm({ review = null, onClose, onSuccess }) 
                   Current Salary
                 </label>
                 <div className="px-4 py-3 bg-gray-100 border border-gray-300 rounded-lg text-gray-700 font-medium">
-                  ${parseFloat(formData.current_salary || 0).toLocaleString()}
+                  {formatCurrency(Number(formData.current_salary || 0))}
                 </div>
               </div>
 
@@ -187,7 +188,7 @@ export default function SalaryReviewForm({ review = null, onClose, onSuccess }) 
                   <div>
                     <p className="text-sm text-gray-600">Increase Amount</p>
                     <p className="text-2xl font-bold text-green-600">
-                      +${increaseAmount.toLocaleString()}
+                      +{formatCurrency(Number(increaseAmount || 0))}
                     </p>
                   </div>
                   <div className="text-right">

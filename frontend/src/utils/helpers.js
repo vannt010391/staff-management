@@ -26,6 +26,11 @@ export const formatCurrency = (amount) => {
   }).format(amount);
 };
 
+export const getTaskAssigneeName = (task) => {
+  if (!task) return '';
+  return task.assigned_to_name || task.assigned_to_username || task.assigned_to_full_name || '';
+};
+
 // Truncate text
 export const truncate = (text, length = 50) => {
   if (!text) return '';

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Department, CareerPath, Employee, KPI, Evaluation, SalaryReview, PersonalReport
+from .models import Department, CareerPath, Employee, KPI, Evaluation, SalaryReview, PersonalReport, Plan, PlanGoal, PlanNote
 
 
 @admin.register(Department)
@@ -129,3 +129,27 @@ class PersonalReportAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         })
     )
+
+
+@admin.register(Plan)
+class PlanAdmin(admin.ModelAdmin):
+    list_display = ['title', 'user', 'plan_type', 'period_start', 'period_end', 'status', 'completion_percentage']
+    list_filter = ['plan_type', 'status', 'period_start']
+    search_fields = ['title', 'user__username', 'description']
+    readonly_fields = ['completion_percentage', 'created_at', 'updated_at', 'reviewed_at']
+
+
+@admin.register(PlanGoal)
+class PlanGoalAdmin(admin.ModelAdmin):
+    list_display = ['title', 'plan', 'priority', 'is_completed', 'created_at']
+    list_filter = ['priority', 'is_completed']
+    search_fields = ['title', 'plan__title']
+    readonly_fields = ['completed_at', 'created_at', 'updated_at']
+
+
+@admin.register(PlanNote)
+class PlanNoteAdmin(admin.ModelAdmin):
+    list_display = ['plan', 'created_by', 'created_at']
+    list_filter = ['created_at']
+    search_fields = ['note', 'plan__title']
+    readonly_fields = ['created_at']

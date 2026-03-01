@@ -61,6 +61,14 @@ class Task(models.Model):
         related_name='created_tasks',
         help_text='Người giao task (Manager/Admin)'
     )
+    reviewer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='review_tasks',
+        help_text='Người phụ trách review task'
+    )
 
     # Task Details
     status = models.CharField(
@@ -78,6 +86,8 @@ class Task(models.Model):
     price = models.DecimalField(
         max_digits=10,
         decimal_places=2,
+        null=True,
+        blank=True,
         help_text='Giá tiền cho task này'
     )
 
@@ -198,7 +208,26 @@ class TaskComment(models.Model):
         null=True,
         help_text='Người comment'
     )
-    comment = models.TextField(help_text='Nội dung comment')
+    comment = models.TextField(blank=True, help_text='Nội dung comment')
+    design_rule = models.ForeignKey(
+        DesignRule,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='task_comments',
+        help_text='Tiêu chí/Design Rule được nhận xét'
+    )
+    is_passed = models.BooleanField(
+        null=True,
+        blank=True,
+        help_text='Kết quả nhận xét: pass/failed (null nếu comment thường)'
+    )
+    attachment = models.FileField(
+        upload_to='task_comment_attachments/',
+        null=True,
+        blank=True,
+        help_text='File/hình ảnh đính kèm cho nhận xét'
+    )
     parent = models.ForeignKey(
         'self',
         on_delete=models.CASCADE,

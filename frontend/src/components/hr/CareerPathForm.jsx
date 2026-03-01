@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import axios from 'axios';
 import { API_BASE_URL } from '../../constants';
 import { toast } from 'sonner';
+import { formatCurrency } from '../../utils/helpers';
 
 export default function CareerPathForm({ careerPath = null, onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
@@ -45,7 +46,7 @@ export default function CareerPathForm({ careerPath = null, onClose, onSuccess }
       });
 
       toast.success(`Career path ${careerPath ? 'updated' : 'created'} successfully`);
-      onSuccess();
+      await onSuccess();
       onClose();
     } catch (error) {
       console.error('Error saving career path:', error);
@@ -155,7 +156,7 @@ export default function CareerPathForm({ careerPath = null, onClose, onSuccess }
               <div className="mt-4 p-4 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg border-2 border-purple-200">
                 <p className="text-sm text-gray-600 mb-1">Salary Range</p>
                 <p className="text-2xl font-bold text-purple-600">
-                  ${parseFloat(formData.min_salary).toLocaleString()} - ${parseFloat(formData.max_salary).toLocaleString()}
+                  {formatCurrency(Number(formData.min_salary || 0))} - {formatCurrency(Number(formData.max_salary || 0))}
                 </p>
                 {parseFloat(formData.max_salary) <= parseFloat(formData.min_salary) && (
                   <p className="text-sm text-red-600 mt-2">⚠️ Maximum salary must be greater than minimum salary</p>

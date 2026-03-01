@@ -4,6 +4,8 @@ import axios from 'axios';
 import { API_BASE_URL } from '../../constants';
 import { toast } from 'sonner';
 import SalaryReviewForm from '../../components/hr/SalaryReviewForm';
+import { PageHeader, StatCard, Button, EmptyState } from '../../components/ui';
+import { formatCurrency } from '../../utils/helpers';
 
 export default function SalaryReviewsPage() {
   const [reviews, setReviews] = useState([]);
@@ -35,7 +37,8 @@ export default function SalaryReviewsPage() {
       const response = await axios.get(`${API_BASE_URL}/hr/salary-reviews/`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const data = Array.isArray(response.data) ? response.data : [];
+      // Handle both paginated response (with results) and direct array
+      const data = response.data.results || (Array.isArray(response.data) ? response.data : []);
       setReviews(data);
     } catch (error) {
       console.error('Error fetching salary reviews:', error);
@@ -114,8 +117,8 @@ export default function SalaryReviewsPage() {
     }
   };
 
-  const handleFormSuccess = () => {
-    fetchReviews();
+  const handleFormSuccess = async () => {
+    await fetchReviews();
   };
 
   const canApproveReject = currentUser?.role === 'admin';
@@ -129,89 +132,75 @@ export default function SalaryReviewsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl">
-              <DollarSign className="h-8 w-8 text-white" />
-            </div>
-            Salary Reviews
-          </h1>
-          <p className="text-gray-600 mt-1">Salary increase requests and approvals</p>
-        </div>
-        <button
-          onClick={() => {
-            setSelectedReviewForEdit(null);
-            setShowForm(true);
-          }}
-          className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl hover:from-green-700 hover:to-emerald-700 transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105"
-        >
-          <Plus className="h-5 w-5" />
-          New Salary Review
-        </button>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
+      <div className="space-y-6">
+        {/* Header */}
+        <PageHeader
+          icon={DollarSign}
+          title="Salary Reviews"
+          subtitle="Salary increase requests and approvals"
+          actions={
+            <Button
+              variant="primary"
+              icon={Plus}
+              onClick={() => {
+                setSelectedReviewForEdit(null);
+                setShowForm(true);
+              }}
+            >
+              New Salary Review
+            </Button>
+          }
+        />
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-2xl p-6 text-white shadow-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-yellow-100 text-sm">Pending</p>
-              <p className="text-3xl font-bold mt-1">
-                {reviews.filter(r => r.status === 'pending').length}
-              </p>
-            </div>
-            <Clock className="h-12 w-12 text-yellow-200" />
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl p-6 text-white shadow-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-green-100 text-sm">Approved</p>
-              <p className="text-3xl font-bold mt-1">
-                {reviews.filter(r => r.status === 'approved').length}
-              </p>
-            </div>
-            <CheckCircle className="h-12 w-12 text-green-200" />
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-2xl p-6 text-white shadow-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-red-100 text-sm">Rejected</p>
-              <p className="text-3xl font-bold mt-1">
-                {reviews.filter(r => r.status === 'rejected').length}
-              </p>
-            </div>
-            <XCircle className="h-12 w-12 text-red-200" />
-          </div>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <StatCard
+            icon={Clock}
+            label="Pending"
+            value={reviews.filter(r => r.status === 'pending').length}
+            gradient="yellow"
+          />
+          <StatCard
+            icon={CheckCircle}
+            label="Approved"
+            value={reviews.filter(r => r.status === 'approved').length}
+            gradient="green"
+          />
+          <StatCard
+            icon={XCircle}
+            label="Rejected"
+            value={reviews.filter(r => r.status === 'rejected').length}
+            gradient="red"
+          />
+          <StatCard
+            icon={TrendingUp}
+            label="Implemented"
+            value={reviews.filter(r => r.status === 'implemented').length}
+            gradient="blue"
+          />
         </div>
 
-        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-6 text-white shadow-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-blue-100 text-sm">Implemented</p>
-              <p className="text-3xl font-bold mt-1">
-                {reviews.filter(r => r.status === 'implemented').length}
-              </p>
-            </div>
-            <TrendingUp className="h-12 w-12 text-blue-200" />
-          </div>
-        </div>
-      </div>
-
-      {/* Reviews List */}
-      {reviews.length === 0 ? (
-        <div className="text-center py-12 bg-white/50 backdrop-blur-sm rounded-2xl border border-white/20">
-          <DollarSign className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600 text-lg">No salary reviews found</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-6">
+        {/* Reviews List */}
+        {reviews.length === 0 ? (
+          <EmptyState
+            icon={DollarSign}
+            title="No salary reviews found"
+            description="Start by creating a salary review request"
+            action={
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setSelectedReviewForEdit(null);
+                  setShowForm(true);
+                }}
+              >
+                New Salary Review
+              </Button>
+            }
+          />
+        ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {reviews.map((review) => (
             <div
               key={review.id}
@@ -243,7 +232,7 @@ export default function SalaryReviewsPage() {
                 <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                   <p className="text-xs text-gray-600 mb-1">Current Salary</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    ${parseFloat(review.current_salary).toLocaleString()}
+                    {formatCurrency(Number(review.current_salary || 0))}
                   </p>
                 </div>
 
@@ -251,7 +240,7 @@ export default function SalaryReviewsPage() {
                 <div className="bg-green-50 rounded-lg p-4 border border-green-200">
                   <p className="text-xs text-green-600 mb-1">Proposed Salary</p>
                   <p className="text-2xl font-bold text-green-700">
-                    ${parseFloat(review.proposed_salary).toLocaleString()}
+                    {formatCurrency(Number(review.proposed_salary || 0))}
                   </p>
                 </div>
 
@@ -262,7 +251,7 @@ export default function SalaryReviewsPage() {
                     +{parseFloat(review.increase_percentage).toFixed(1)}%
                   </p>
                   <p className="text-xs text-gray-600 mt-1">
-                    ${(parseFloat(review.proposed_salary) - parseFloat(review.current_salary)).toLocaleString()}
+                    {formatCurrency((Number(review.proposed_salary || 0) - Number(review.current_salary || 0)))}
                   </p>
                 </div>
               </div>
@@ -311,9 +300,9 @@ export default function SalaryReviewsPage() {
                         setActionType('approve');
                         setShowModal(true);
                       }}
-                      className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2"
+                      className="flex-1 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl hover:from-green-700 hover:to-emerald-700 transition-all font-semibold flex items-center justify-center gap-2 shadow-lg hover:shadow-xl hover:scale-105"
                     >
-                      <CheckCircle className="h-4 w-4" />
+                      <CheckCircle className="h-5 w-5" />
                       Approve
                     </button>
                     <button
@@ -322,9 +311,9 @@ export default function SalaryReviewsPage() {
                         setActionType('reject');
                         setShowModal(true);
                       }}
-                      className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium flex items-center justify-center gap-2"
+                      className="flex-1 px-6 py-3 bg-gradient-to-r from-red-600 to-pink-600 text-white rounded-xl hover:from-red-700 hover:to-pink-700 transition-all font-semibold flex items-center justify-center gap-2 shadow-lg hover:shadow-xl hover:scale-105"
                     >
-                      <XCircle className="h-4 w-4" />
+                      <XCircle className="h-5 w-5" />
                       Reject
                     </button>
                   </>
@@ -337,9 +326,9 @@ export default function SalaryReviewsPage() {
                       setActionType('implement');
                       setShowModal(true);
                     }}
-                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center justify-center gap-2"
+                    className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all font-semibold flex items-center justify-center gap-2 shadow-lg hover:shadow-xl hover:scale-105"
                   >
-                    <TrendingUp className="h-4 w-4" />
+                    <TrendingUp className="h-5 w-5" />
                     Implement
                   </button>
                 )}
@@ -350,21 +339,21 @@ export default function SalaryReviewsPage() {
                     setActionType('view');
                     setShowModal(true);
                   }}
-                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium flex items-center gap-2"
+                  className="px-6 py-3 bg-white/80 backdrop-blur-sm text-gray-700 rounded-xl hover:bg-gray-50 transition-all font-semibold flex items-center gap-2 border border-gray-200 shadow-md hover:shadow-lg"
                 >
-                  <Eye className="h-4 w-4" />
+                  <Eye className="h-5 w-5" />
                   View Details
                 </button>
               </div>
 
               {/* Edit & Delete Buttons (only for pending reviews) */}
               {review.status === 'pending' && (
-                <div className="flex gap-2 mt-3">
+                <div className="flex gap-3 mt-3">
                   <button
                     onClick={() => handleEdit(review)}
-                    className="flex-1 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium flex items-center justify-center gap-2"
+                    className="flex-1 px-6 py-3 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-all font-semibold flex items-center justify-center gap-2 border border-blue-200 shadow-md hover:shadow-lg"
                   >
-                    <Edit className="h-4 w-4" />
+                    <Edit className="h-5 w-5" />
                     Edit
                   </button>
                   <button
@@ -372,9 +361,9 @@ export default function SalaryReviewsPage() {
                       setReviewToDelete(review);
                       setShowDeleteConfirm(true);
                     }}
-                    className="flex-1 px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium flex items-center justify-center gap-2"
+                    className="flex-1 px-6 py-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-all font-semibold flex items-center justify-center gap-2 border border-red-200 shadow-md hover:shadow-lg"
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <Trash2 className="h-5 w-5" />
                     Delete
                   </button>
                 </div>
@@ -382,9 +371,9 @@ export default function SalaryReviewsPage() {
             </div>
           ))}
         </div>
-      )}
+        )}
 
-      {/* Action Modal */}
+        {/* Action Modal */}
       {showModal && selectedReview && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
@@ -401,7 +390,7 @@ export default function SalaryReviewsPage() {
                 <div>
                   <p className="text-sm text-gray-600">Current → Proposed</p>
                   <p className="font-semibold">
-                    ${parseFloat(selectedReview.current_salary).toLocaleString()} → ${parseFloat(selectedReview.proposed_salary).toLocaleString()}
+                    {formatCurrency(Number(selectedReview.current_salary || 0))} → {formatCurrency(Number(selectedReview.proposed_salary || 0))}
                   </p>
                 </div>
                 <div>
@@ -426,7 +415,7 @@ export default function SalaryReviewsPage() {
                   <textarea
                     value={comments}
                     onChange={(e) => setComments(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all resize-none"
                     rows="4"
                     placeholder="Your comments..."
                   />
@@ -438,10 +427,10 @@ export default function SalaryReviewsPage() {
               {actionType !== 'view' && (
                 <button
                   onClick={handleAction}
-                  className={`flex-1 px-4 py-2 text-white rounded-lg transition-colors font-medium ${
-                    actionType === 'approve' ? 'bg-green-600 hover:bg-green-700' :
-                    actionType === 'reject' ? 'bg-red-600 hover:bg-red-700' :
-                    'bg-blue-600 hover:bg-blue-700'
+                  className={`flex-1 px-6 py-3 text-white rounded-xl transition-all font-semibold shadow-lg hover:shadow-xl hover:scale-105 ${
+                    actionType === 'approve' ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700' :
+                    actionType === 'reject' ? 'bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700' :
+                    'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700'
                   }`}
                 >
                   Confirm {actionType}
@@ -454,7 +443,7 @@ export default function SalaryReviewsPage() {
                   setComments('');
                   setActionType('');
                 }}
-                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+                className="flex-1 px-6 py-3 bg-white/80 backdrop-blur-sm text-gray-700 rounded-xl hover:bg-gray-50 transition-all font-semibold border border-gray-200 shadow-md hover:shadow-lg"
               >
                 Close
               </button>
@@ -487,7 +476,7 @@ export default function SalaryReviewsPage() {
             <div className="flex gap-3">
               <button
                 onClick={handleDelete}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+                className="flex-1 px-6 py-3 bg-gradient-to-r from-red-600 to-pink-600 text-white rounded-xl hover:from-red-700 hover:to-pink-700 transition-all font-semibold shadow-lg hover:shadow-xl hover:scale-105"
               >
                 Delete
               </button>
@@ -496,7 +485,7 @@ export default function SalaryReviewsPage() {
                   setShowDeleteConfirm(false);
                   setReviewToDelete(null);
                 }}
-                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+                className="flex-1 px-6 py-3 bg-white/80 backdrop-blur-sm text-gray-700 rounded-xl hover:bg-gray-50 transition-all font-semibold border border-gray-200 shadow-md hover:shadow-lg"
               >
                 Cancel
               </button>
@@ -504,6 +493,7 @@ export default function SalaryReviewsPage() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

@@ -437,3 +437,193 @@ class PersonalReport(models.Model):
 
     def __str__(self):
         return f"{self.employee.employee_id} - {self.report_type} ({self.period_start} to {self.period_end})"
+
+
+class Plan(models.Model):
+    """
+    Multi-scale planning: daily/weekly/monthly/yearly plans
+    """
+    PLAN_TYPE_CHOICES = [
+        ('daily', 'Daily Plan'),
+        ('weekly', 'Weekly Plan'),
+        ('monthly', 'Monthly Plan'),
+        ('yearly', 'Yearly Plan'),
+    ]
+
+    STATUS_CHOICES = [
+        ('draft', 'Draft'),
+        ('active', 'Active'),
+        ('completed', 'Completed'),
+        ('archived', 'Archived'),
+    ]
+
+    # Core fields
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='plans'
+    )
+    plan_type = models.CharField(max_length=20, choices=PLAN_TYPE_CHOICES)
+    period_start = models.DateField(help_text='Start date of planning period')
+    period_end = models.DateField(help_text='End date of planning period')
+
+    # Content
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True, help_text='Overview/context for this plan')
+
+    # Progress tracking
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
+    completion_percentage = models.IntegerField(
+        default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(100)]
+    )
+
+    # Manager review
+    manager_feedback = models.TextField(blank=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reviewed_plans'
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    # Hierarchy (optional parent-child)
+    parent_plan = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='child_plans',
+        help_text='Optional parent plan (e.g., monthly plan can have weekly child plans)'
+    )
+
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-period_start', 'plan_type']
+        indexes = [
+            models.Index(fields=['user', 'plan_type', 'period_start']),
+        ]
+
+    def __str__(self):
+        return f"{self.get_plan_type_display()} - {self.user.get_full_name()} ({self.period_start})"
+
+    @property
+    def is_active_period(self):
+        """Check if plan is within its active period"""
+        from django.utils import timezone
+        today = timezone.now().date()
+        return self.period_start <= today <= self.period_end
+
+    @property
+    def total_goals(self):
+        return self.goals.count()
+
+    @property
+    def completed_goals(self):
+        return self.goals.filter(is_completed=True).count()
+
+    def auto_calculate_completion(self):
+        """Auto-calculate completion percentage from goals"""
+        total = self.total_goals
+        if total > 0:
+            completed = self.completed_goals
+            self.completion_percentage = int((completed / total) * 100)
+            self.save()
+
+
+class PlanGoal(models.Model):
+    """
+    Individual goals/objectives within a plan
+    """
+    PRIORITY_CHOICES = [
+        ('low', 'Low'),
+        ('medium', 'Medium'),
+        ('high', 'High'),
+        ('critical', 'Critical'),
+    ]
+
+    plan = models.ForeignKey(
+        Plan,
+        on_delete=models.CASCADE,
+        related_name='goals'
+    )
+
+    # Goal details
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='medium')
+
+    # Tracking
+    is_completed = models.BooleanField(default=False)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    progress_notes = models.TextField(blank=True, help_text='Notes on progress')
+
+    # Integration
+    related_task = models.ForeignKey(
+        'tasks.Task',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='plan_goals',
+        help_text='Optional link to project task'
+    )
+    related_project = models.ForeignKey(
+        'projects.Project',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='plan_goals',
+        help_text='Optional link to project'
+    )
+
+    # Order
+    order = models.IntegerField(default=0, help_text='Display order')
+
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['order', 'created_at']
+
+    def __str__(self):
+        return f"{self.title} ({'✓' if self.is_completed else '○'})"
+
+    def mark_completed(self):
+        """Mark goal as completed"""
+        from django.utils import timezone
+        self.is_completed = True
+        self.completed_at = timezone.now()
+        self.save()
+        # Update parent plan completion
+        self.plan.auto_calculate_completion()
+
+
+class PlanNote(models.Model):
+    """
+    Reflective notes and updates for plans
+    """
+    plan = models.ForeignKey(
+        Plan,
+        on_delete=models.CASCADE,
+        related_name='notes'
+    )
+
+    note = models.TextField()
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='plan_notes'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Note by {self.created_by.username} on {self.created_at.strftime('%Y-%m-%d')}"

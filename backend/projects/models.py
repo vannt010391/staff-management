@@ -30,6 +30,14 @@ class Project(models.Model):
         related_name='created_projects',
         help_text='Người tạo dự án'
     )
+    customer = models.ForeignKey(
+        'crm.Customer',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='projects',
+        help_text='Khách hàng của dự án'
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

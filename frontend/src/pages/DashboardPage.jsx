@@ -26,24 +26,24 @@ export default function DashboardPage() {
       </div>
 
       {/* Header với Glass Morphism */}
-      <div className="relative overflow-hidden bg-white/40 backdrop-blur-2xl rounded-3xl shadow-2xl border border-white/50 p-8">
+      <div className="relative overflow-hidden bg-white/40 backdrop-blur-2xl rounded-2xl shadow-lg border border-white/50 p-6">
         {/* Animated Gradient Overlay */}
         <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 via-purple-600/10 to-pink-600/10 animate-pulse" />
 
-        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-          <div className="space-y-3">
-            <div className="flex items-center gap-4">
+        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="space-y-2">
+            <div className="flex items-center gap-3">
               <div className="relative">
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl blur-xl opacity-50 animate-pulse" />
-                <div className="relative p-4 bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl shadow-2xl transform hover:scale-110 hover:rotate-6 transition-all duration-500">
-                  <Sparkles className="h-10 w-10 text-white" />
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl blur-lg opacity-50 animate-pulse" />
+                <div className="relative p-2 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg shadow-lg transform hover:scale-110 hover:rotate-6 transition-all duration-500">
+                  <Sparkles className="h-6 w-6 text-white" />
                 </div>
               </div>
               <div>
-                <h1 className="text-5xl md:text-6xl font-black bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+                <h1 className="text-3xl md:text-4xl font-black bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
                   Dashboard
                 </h1>
-                <p className="text-gray-600 text-lg mt-1">
+                <p className="text-gray-600 text-base mt-1">
                   Welcome back, <span className="font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">{user?.first_name || user?.username}</span>! 👋
                 </p>
               </div>
@@ -51,11 +51,11 @@ export default function DashboardPage() {
           </div>
 
           <div className="hidden md:block">
-            <div className="group relative overflow-hidden bg-white/60 backdrop-blur-xl rounded-2xl px-8 py-4 border border-white/50 shadow-xl hover:shadow-2xl transition-all duration-500 hover:scale-105">
+            <div className="group relative overflow-hidden bg-white/60 backdrop-blur-xl rounded-xl px-6 py-3 border border-white/50 shadow-lg hover:shadow-xl transition-all duration-500 hover:scale-105">
               <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 to-purple-600/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
               <div className="relative z-10">
-                <p className="text-sm font-semibold text-gray-600 mb-1">Your Role</p>
-                <p className="text-2xl font-black capitalize bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                <p className="text-xs font-semibold text-gray-600 mb-1">Your Role</p>
+                <p className="text-xl font-black capitalize bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                   {user?.role}
                 </p>
               </div>
@@ -67,7 +67,7 @@ export default function DashboardPage() {
       {/* Stats Cards with Floating Animation */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
-          icon={<LayoutDashboard className="h-7 w-7" />}
+          icon={<LayoutDashboard className="h-6 w-6" />}
           title="Total Tasks"
           value="0"
           color="from-blue-500 to-cyan-600"
@@ -76,7 +76,7 @@ export default function DashboardPage() {
           delay="0"
         />
         <StatCard
-          icon={<Clock className="h-7 w-7" />}
+          icon={<Clock className="h-6 w-6" />}
           title="In Progress"
           value="0"
           color="from-yellow-500 to-orange-600"
@@ -85,7 +85,7 @@ export default function DashboardPage() {
           delay="100"
         />
         <StatCard
-          icon={<CheckCircle className="h-7 w-7" />}
+          icon={<CheckCircle className="h-6 w-6" />}
           title="Completed"
           value="0"
           color="from-green-500 to-emerald-600"
@@ -94,7 +94,7 @@ export default function DashboardPage() {
           delay="200"
         />
         <StatCard
-          icon={<AlertCircle className="h-7 w-7" />}
+          icon={<AlertCircle className="h-6 w-6" />}
           title="Pending Review"
           value="0"
           color="from-purple-500 to-pink-600"
@@ -111,10 +111,10 @@ export default function DashboardPage() {
           <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-indigo-500/5 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
           <div className="relative z-10">
             <div className="flex items-center gap-3 mb-6">
-              <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
-                <TrendingUp className="h-6 w-6 text-white" />
+              <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg shadow-lg">
+                <TrendingUp className="h-5 w-5 text-white" />
               </div>
-              <h2 className="text-2xl font-black text-gray-900">Quick Stats</h2>
+              <h2 className="text-xl font-black text-gray-900">Quick Stats</h2>
             </div>
             <div className="space-y-4">
               <QuickStatItem
@@ -147,10 +147,10 @@ export default function DashboardPage() {
           <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-pink-500/5 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
           <div className="relative z-10">
             <div className="flex items-center gap-3 mb-6">
-              <div className="p-3 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl shadow-lg">
-                <Zap className="h-6 w-6 text-white" />
+              <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg shadow-lg">
+                <Zap className="h-5 w-5 text-white" />
               </div>
-              <h2 className="text-2xl font-black text-gray-900">System Status</h2>
+              <h2 className="text-xl font-black text-gray-900">System Status</h2>
             </div>
             <div className="space-y-4">
               <StatusItem
@@ -178,10 +178,10 @@ export default function DashboardPage() {
         <div className="absolute inset-0 bg-gradient-to-br from-indigo-100/40 via-purple-100/40 to-pink-100/40" />
         <div className="relative z-10">
           <div className="flex items-center gap-3 mb-4">
-            <div className="p-3 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-lg">
-              <Target className="h-6 w-6 text-white" />
+            <div className="p-2 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg shadow-lg">
+              <Target className="h-5 w-5 text-white" />
             </div>
-            <h2 className="text-3xl font-black bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+            <h2 className="text-2xl font-black bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
               🚀 Getting Started
             </h2>
           </div>
@@ -217,27 +217,27 @@ export default function DashboardPage() {
 function StatCard({ icon, title, value, color, iconBg, iconColor, delay }) {
   return (
     <div
-      className="group relative bg-white/70 backdrop-blur-xl rounded-2xl shadow-xl border border-white/50 p-6 hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 cursor-pointer"
+      className="group relative bg-white/70 backdrop-blur-xl rounded-xl shadow-lg border border-white/50 p-4 hover:shadow-xl transition-all duration-500 hover:-translate-y-2 cursor-pointer"
       style={{ animationDelay: `${delay}ms` }}
     >
       {/* Gradient Border Effect */}
-      <div className={`absolute inset-0 bg-gradient-to-r ${color} opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-2xl`} />
-      <div className="absolute inset-[2px] bg-white rounded-2xl" />
+      <div className={`absolute inset-0 bg-gradient-to-r ${color} opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-xl`} />
+      <div className="absolute inset-[2px] bg-white rounded-xl" />
 
       <div className="relative z-10 flex items-center justify-between">
         <div className="space-y-2">
-          <p className="text-sm font-bold text-gray-600">{title}</p>
-          <p className={`text-5xl font-black bg-gradient-to-r ${color} bg-clip-text text-transparent`}>
+          <p className="text-xs font-bold text-gray-600">{title}</p>
+          <p className={`text-3xl font-black bg-gradient-to-r ${color} bg-clip-text text-transparent`}>
             {value}
           </p>
         </div>
-        <div className={`${iconBg} p-4 rounded-2xl ${iconColor} shadow-lg group-hover:scale-110 group-hover:rotate-12 transition-all duration-500`}>
+        <div className={`${iconBg} p-3 rounded-xl ${iconColor} shadow-lg group-hover:scale-110 group-hover:rotate-12 transition-all duration-500`}>
           {icon}
         </div>
       </div>
 
       {/* Bottom Accent Line */}
-      <div className={`absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r ${color} rounded-b-2xl`} />
+      <div className={`absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r ${color} rounded-b-xl`} />
     </div>
   );
 }

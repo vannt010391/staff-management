@@ -44,7 +44,7 @@ export const useAuthStore = create((set) => ({
       const user = await authService.getCurrentUser();
       set({ user, isAuthenticated: true, isLoading: false });
     } catch (error) {
-      console.error('Load user error:', error);
+      authService.clearAuthStorage();
       set({ user: null, isAuthenticated: false, isLoading: false });
     }
   },

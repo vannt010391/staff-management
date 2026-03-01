@@ -1,4 +1,5 @@
 import { X, User, Calendar, DollarSign, TrendingUp, CheckCircle, XCircle, Clock, FileText } from 'lucide-react';
+import { formatCurrency } from '../../utils/helpers';
 
 export default function SalaryReviewDetail({ review, onClose }) {
   if (!review) return null;
@@ -136,7 +137,7 @@ export default function SalaryReviewDetail({ review, onClose }) {
                   <p className="text-sm text-gray-600">Current Salary</p>
                 </div>
                 <p className="text-3xl font-bold text-gray-900">
-                  ${parseFloat(review.current_salary).toLocaleString()}
+                  {formatCurrency(Number(review.current_salary || 0))}
                 </p>
                 <p className="text-xs text-gray-500 mt-1">Annual</p>
               </div>
@@ -148,10 +149,10 @@ export default function SalaryReviewDetail({ review, onClose }) {
                   <p className="text-sm text-green-600">Proposed Salary</p>
                 </div>
                 <p className="text-3xl font-bold text-green-700">
-                  ${parseFloat(review.proposed_salary).toLocaleString()}
+                  {formatCurrency(Number(review.proposed_salary || 0))}
                 </p>
                 <p className="text-xs text-green-600 mt-1">
-                  +${salaryIncrease.toLocaleString()}
+                  +{formatCurrency(Number(salaryIncrease || 0))}
                 </p>
               </div>
 
@@ -176,7 +177,7 @@ export default function SalaryReviewDetail({ review, onClose }) {
               <div>
                 <div className="flex justify-between text-sm mb-1">
                   <span className="text-gray-600">Current</span>
-                  <span className="font-medium">${parseFloat(review.current_salary).toLocaleString()}</span>
+                  <span className="font-medium">{formatCurrency(Number(review.current_salary || 0))}</span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-3">
                   <div
@@ -188,7 +189,7 @@ export default function SalaryReviewDetail({ review, onClose }) {
               <div>
                 <div className="flex justify-between text-sm mb-1">
                   <span className="text-green-600">Proposed</span>
-                  <span className="font-medium text-green-600">${parseFloat(review.proposed_salary).toLocaleString()}</span>
+                  <span className="font-medium text-green-600">{formatCurrency(Number(review.proposed_salary || 0))}</span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-3">
                   <div

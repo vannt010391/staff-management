@@ -50,7 +50,7 @@ export default function PersonalReportForm({ report = null, onClose, onSuccess }
       });
 
       toast.success(`Report ${report ? 'updated' : 'created'} successfully`);
-      onSuccess();
+      await onSuccess();
       onClose();
     } catch (error) {
       console.error('Error saving report:', error);

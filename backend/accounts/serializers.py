@@ -11,7 +11,11 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
-            'role', 'phone', 'avatar', 'is_active',
+            'role', 'phone',
+            'bank_name', 'bank_account_number', 'bank_account_holder', 'bank_branch',
+            'bank_qr_code',
+            'date_of_birth', 'address', 'bio',
+            'avatar', 'is_active',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
@@ -36,7 +40,9 @@ class UserCreateSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'username', 'email', 'password', 'password2',
-            'first_name', 'last_name', 'role', 'phone'
+            'first_name', 'last_name', 'role', 'phone',
+            'bank_name', 'bank_account_number', 'bank_account_holder', 'bank_branch',
+            'bank_qr_code', 'date_of_birth', 'address', 'bio'
         ]
 
     def validate(self, attrs):
@@ -60,8 +66,33 @@ class UserUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            'email', 'first_name', 'last_name', 'phone', 'avatar'
+            'email', 'first_name', 'last_name', 'phone',
+            'bank_name', 'bank_account_number', 'bank_account_holder', 'bank_branch',
+            'bank_qr_code', 'date_of_birth', 'address', 'bio', 'avatar'
         ]
+
+
+class UserSetPasswordSerializer(serializers.Serializer):
+    """Serializer for admin set password per user"""
+    new_password = serializers.CharField(
+        required=True,
+        write_only=True,
+        validators=[validate_password],
+        style={'input_type': 'password'}
+    )
+    new_password2 = serializers.CharField(
+        required=True,
+        write_only=True,
+        style={'input_type': 'password'},
+        label='Confirm New Password'
+    )
+
+    def validate(self, attrs):
+        if attrs['new_password'] != attrs['new_password2']:
+            raise serializers.ValidationError({
+                'new_password': "Password fields didn't match."
+            })
+        return attrs
 
 
 class ChangePasswordSerializer(serializers.Serializer):

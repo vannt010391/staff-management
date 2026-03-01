@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Department, CareerPath, Employee, KPI, Evaluation, SalaryReview, PersonalReport
+from .models import Department, CareerPath, Employee, KPI, Evaluation, SalaryReview, PersonalReport, Plan, PlanGoal, PlanNote
 from accounts.serializers import UserSerializer
 
 
@@ -198,3 +198,99 @@ class PersonalReportListSerializer(serializers.ModelSerializer):
 
     def get_is_reviewed(self, obj):
         return obj.manager_reviewed_by is not None
+
+
+class PlanGoalSerializer(serializers.ModelSerializer):
+    related_task_details = serializers.SerializerMethodField()
+    related_project_details = serializers.SerializerMethodField()
+    priority_display = serializers.CharField(source='get_priority_display', read_only=True)
+
+    class Meta:
+        model = PlanGoal
+        fields = [
+            'id', 'title', 'description', 'priority', 'priority_display', 'is_completed',
+            'completed_at', 'progress_notes', 'related_task', 'related_project',
+            'related_task_details', 'related_project_details', 'order',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['completed_at', 'created_at', 'updated_at']
+
+    def get_related_task_details(self, obj):
+        if obj.related_task:
+            return {
+                'id': obj.related_task.id,
+                'title': obj.related_task.title,
+                'status': obj.related_task.status
+            }
+        return None
+
+    def get_related_project_details(self, obj):
+        if obj.related_project:
+            return {
+                'id': obj.related_project.id,
+                'name': obj.related_project.name,
+                'status': obj.related_project.status
+            }
+        return None
+
+
+class PlanNoteSerializer(serializers.ModelSerializer):
+    created_by_name = serializers.CharField(source='created_by.get_full_name', read_only=True)
+
+    class Meta:
+        model = PlanNote
+        fields = ['id', 'note', 'created_by', 'created_by_name', 'created_at']
+        read_only_fields = ['created_by', 'created_at']
+
+
+class PlanListSerializer(serializers.ModelSerializer):
+    """Lightweight serializer for list views"""
+    user_name = serializers.CharField(source='user.get_full_name', read_only=True)
+    plan_type_display = serializers.CharField(source='get_plan_type_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    is_active_period = serializers.ReadOnlyField()
+
+    class Meta:
+        model = Plan
+        fields = [
+            'id', 'user', 'user_name', 'plan_type', 'plan_type_display',
+            'period_start', 'period_end', 'title', 'status', 'status_display',
+            'completion_percentage', 'is_active_period', 'created_at'
+        ]
+        read_only_fields = ['user', 'completion_percentage', 'created_at']
+
+
+class PlanSerializer(serializers.ModelSerializer):
+    """Full serializer with nested data"""
+    user_name = serializers.CharField(source='user.get_full_name', read_only=True)
+    plan_type_display = serializers.CharField(source='get_plan_type_display', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    is_active_period = serializers.ReadOnlyField()
+    total_goals = serializers.ReadOnlyField()
+    completed_goals = serializers.ReadOnlyField()
+
+    goals = PlanGoalSerializer(many=True, read_only=True)
+    notes = PlanNoteSerializer(many=True, read_only=True)
+
+    reviewed_by_name = serializers.CharField(
+        source='reviewed_by.get_full_name',
+        read_only=True,
+        allow_null=True
+    )
+    parent_plan_title = serializers.CharField(
+        source='parent_plan.title',
+        read_only=True,
+        allow_null=True
+    )
+
+    class Meta:
+        model = Plan
+        fields = [
+            'id', 'user', 'user_name', 'plan_type', 'plan_type_display',
+            'period_start', 'period_end', 'title', 'description', 'status',
+            'status_display', 'completion_percentage', 'manager_feedback',
+            'reviewed_by', 'reviewed_by_name', 'reviewed_at', 'parent_plan',
+            'parent_plan_title', 'is_active_period', 'total_goals', 'completed_goals',
+            'goals', 'notes', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['user', 'completion_percentage', 'reviewed_at', 'created_at', 'updated_at']

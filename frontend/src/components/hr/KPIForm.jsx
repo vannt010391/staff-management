@@ -73,7 +73,7 @@ export default function KPIForm({ kpi = null, onClose, onSuccess }) {
       });
 
       toast.success(`KPI ${kpi ? 'updated' : 'created'} successfully`);
-      onSuccess();
+      await onSuccess();
       onClose();
     } catch (error) {
       console.error('Error saving KPI:', error);

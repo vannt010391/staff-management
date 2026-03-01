@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import { ROLES } from '../../constants';
@@ -17,6 +17,16 @@ import {
   FileText,
   Award,
   DollarSign,
+  Target,
+  ChevronDown,
+  ChevronRight,
+  UserCog,
+  UsersRound,
+  Tag,
+  Palette,
+  Settings,
+  UserCircle,
+  KeyRound,
 } from 'lucide-react';
 
 export default function Layout({ children }) {
@@ -24,10 +34,34 @@ export default function Layout({ children }) {
   const location = useLocation();
   const { user, logout } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
+        setUserMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleLogout = async () => {
+    setUserMenuOpen(false);
     await logout();
     navigate('/login');
+  };
+
+  const handleGoToProfile = () => {
+    setUserMenuOpen(false);
+    navigate('/profile');
+  };
+
+  const handleGoToChangePassword = () => {
+    setUserMenuOpen(false);
+    navigate('/profile#change-password');
   };
 
   const navigation = getNavigationItems(user?.role);
@@ -83,13 +117,41 @@ export default function Layout({ children }) {
                   </p>
                   <p className="text-xs text-gray-500 capitalize">{user?.role}</p>
                 </div>
-                <button
-                  onClick={handleLogout}
-                  className="p-2 text-gray-400 hover:text-red-500"
-                  title="Logout"
-                >
-                  <LogOut className="h-5 w-5" />
-                </button>
+                <div className="relative" ref={userMenuRef}>
+                  <button
+                    onClick={() => setUserMenuOpen((prev) => !prev)}
+                    className="p-2 text-gray-500 hover:text-blue-600 rounded-lg hover:bg-gray-100"
+                    title="User menu"
+                  >
+                    <UserCircle className="h-6 w-6" />
+                  </button>
+
+                  {userMenuOpen && (
+                    <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-20">
+                      <button
+                        onClick={handleGoToProfile}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 inline-flex items-center gap-2"
+                      >
+                        <UserCircle className="h-4 w-4" />
+                        Xem profile
+                      </button>
+                      <button
+                        onClick={handleGoToChangePassword}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 inline-flex items-center gap-2"
+                      >
+                        <KeyRound className="h-4 w-4" />
+                        Đổi mật khẩu
+                      </button>
+                      <button
+                        onClick={handleLogout}
+                        className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 inline-flex items-center gap-2"
+                      >
+                        <LogOut className="h-4 w-4" />
+                        Đăng xuất
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -105,15 +167,74 @@ export default function Layout({ children }) {
 }
 
 function SidebarContent({ navigation, currentPath }) {
+  const [expandedGroups, setExpandedGroups] = useState({});
+
+  const toggleGroup = (groupName) => {
+    setExpandedGroups(prev => ({
+      ...prev,
+      [groupName]: !prev[groupName]
+    }));
+  };
+
   return (
     <nav className="flex-1 px-4 py-4 space-y-1">
       {navigation.map((item) => {
+        // If item has children, render as group
+        if (item.children) {
+          const isExpanded = expandedGroups[item.name] !== false; // Default to expanded
+          const hasActiveChild = item.children.some(child => currentPath === child.href);
+
+          return (
+            <div key={item.name} className="mb-2">
+              <button
+                onClick={() => toggleGroup(item.name)}
+                className={`w-full flex items-center justify-between px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${
+                  hasActiveChild ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                <div className="flex items-center">
+                  <item.icon className="mr-3 h-5 w-5" />
+                  {item.name}
+                </div>
+                {isExpanded ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </button>
+
+              {isExpanded && (
+                <div className="mt-1 ml-4 space-y-1">
+                  {item.children.map((child) => {
+                    const isActive = currentPath === child.href;
+                    return (
+                      <Link
+                        key={child.name}
+                        to={child.href}
+                        className={`flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                          isActive
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        <child.icon className="mr-3 h-4 w-4" />
+                        {child.name}
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        }
+
+        // Regular single item (no children)
         const isActive = currentPath === item.href;
         return (
           <Link
             key={item.name}
             to={item.href}
-            className={`flex items-center px-4 py-2 text-sm font-medium rounded-lg ${
+            className={`flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
               isActive
                 ? 'bg-blue-50 text-blue-600'
                 : 'text-gray-700 hover:bg-gray-50'
@@ -131,38 +252,92 @@ function SidebarContent({ navigation, currentPath }) {
 function getNavigationItems(role) {
   const commonItems = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+    { name: 'My Profile', href: '/profile', icon: UserCircle },
   ];
 
-  const managerAdminItems = [
-    { name: 'Projects', href: '/projects', icon: FolderKanban },
-    { name: 'All Tasks', href: '/tasks', icon: ListTodo },
-    { name: 'Users', href: '/users', icon: Users },
-    { name: 'Employees', href: '/hr/employees', icon: Briefcase },
-    { name: 'Departments', href: '/hr/departments', icon: Building2 },
-    { name: 'Career Paths', href: '/hr/career-paths', icon: TrendingUp },
-    { name: 'KPI Dashboard', href: '/hr/kpi', icon: TrendingUp },
-    { name: 'Evaluations', href: '/hr/evaluations', icon: Award },
-    { name: 'Salary Reviews', href: '/hr/salary-reviews', icon: DollarSign },
-    { name: 'Reports', href: '/hr/reports', icon: FileText },
+  const managerAdminGroups = [
+    {
+      name: 'CRM',
+      icon: TrendingUp,
+      children: [
+        { name: 'Dashboard', href: '/crm', icon: LayoutDashboard },
+        { name: 'Customers', href: '/crm/customers', icon: Building2 },
+        { name: 'Customer Stages', href: '/crm/settings/stages', icon: Target },
+        { name: 'Expense Types', href: '/crm/settings/expense-types', icon: DollarSign },
+      ]
+    },
+    {
+      name: 'Projects',
+      icon: FolderKanban,
+      children: [
+        { name: 'Projects', href: '/projects', icon: FolderKanban },
+        { name: 'Topics', href: '/topics', icon: Tag },
+        { name: 'Design Rules', href: '/design-rules', icon: Palette },
+        { name: 'All Tasks', href: '/tasks', icon: ListTodo },
+      ]
+    },
+    {
+      name: 'Users',
+      icon: Users,
+      children: [
+        { name: 'Departments', href: '/hr/departments', icon: Building2 },
+        { name: 'Users', href: '/users', icon: Users },
+        { name: 'Employees', href: '/hr/employees', icon: Briefcase },
+      ]
+    },
+    {
+      name: 'HR',
+      icon: UserCog,
+      children: [
+        { name: 'Career Paths', href: '/hr/career-paths', icon: TrendingUp },
+        { name: 'KPI Dashboard', href: '/hr/kpi', icon: TrendingUp },
+        { name: 'Evaluations', href: '/hr/evaluations', icon: Award },
+        { name: 'Salary Reviews', href: '/hr/salary-reviews', icon: DollarSign },
+        { name: 'Money Management', href: '/hr/money', icon: DollarSign },
+      ]
+    },
+    {
+      name: 'Team Management',
+      icon: UsersRound,
+      children: [
+        { name: 'All Plans', href: '/hr/plans', icon: Target },
+        { name: 'Reports', href: '/hr/reports', icon: FileText },
+      ]
+    },
   ];
 
-  const teamLeadItems = [
-    { name: 'Projects', href: '/projects', icon: FolderKanban },
-    { name: 'All Tasks', href: '/tasks', icon: ListTodo },
+  const teamLeadGroups = [
+    {
+      name: 'Projects',
+      icon: FolderKanban,
+      children: [
+        { name: 'Projects', href: '/projects', icon: FolderKanban },
+        { name: 'All Tasks', href: '/tasks', icon: ListTodo },
+      ]
+    },
+    {
+      name: 'Team Management',
+      icon: UsersRound,
+      children: [
+        { name: 'My Plans', href: '/hr/plans', icon: Target },
+      ]
+    },
   ];
 
   const staffItems = [
     { name: 'All Tasks', href: '/tasks', icon: ListTodo },
+    { name: 'My Plans', href: '/hr/plans', icon: Target },
   ];
 
   const freelancerItems = [
     { name: 'My Tasks', href: '/tasks', icon: ListTodo },
+    { name: 'My Plans', href: '/hr/plans', icon: Target },
   ];
 
   if (role === ROLES.ADMIN || role === ROLES.MANAGER) {
-    return [...commonItems, ...managerAdminItems];
+    return [...commonItems, ...managerAdminGroups];
   } else if (role === ROLES.TEAM_LEAD) {
-    return [...commonItems, ...teamLeadItems];
+    return [...commonItems, ...teamLeadGroups];
   } else if (role === ROLES.STAFF) {
     return [...commonItems, ...staffItems];
   } else if (role === ROLES.FREELANCER) {

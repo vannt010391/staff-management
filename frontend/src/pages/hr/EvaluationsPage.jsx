@@ -4,6 +4,7 @@ import axios from 'axios';
 import { API_BASE_URL } from '../../constants';
 import { toast } from 'sonner';
 import EvaluationForm from '../../components/hr/EvaluationForm';
+import { PageHeader, StatCard, Button, EmptyState, Table, ViewToggle } from '../../components/ui';
 
 export default function EvaluationsPage() {
   const [evaluations, setEvaluations] = useState([]);
@@ -15,6 +16,7 @@ export default function EvaluationsPage() {
   const [selectedEvaluation, setSelectedEvaluation] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [evaluationToDelete, setEvaluationToDelete] = useState(null);
+  const [view, setView] = useState('list');
 
   useEffect(() => {
     fetchEvaluations();
@@ -27,7 +29,8 @@ export default function EvaluationsPage() {
       const response = await axios.get(`${API_BASE_URL}/hr/evaluations/`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const data = Array.isArray(response.data) ? response.data : [];
+      // Handle both paginated response (with results) and direct array
+      const data = response.data.results || (Array.isArray(response.data) ? response.data : []);
       setEvaluations(data);
     } catch (error) {
       console.error('Error fetching evaluations:', error);
@@ -101,9 +104,113 @@ export default function EvaluationsPage() {
     }
   };
 
-  const handleFormSuccess = () => {
-    fetchEvaluations();
+  const handleFormSuccess = async () => {
+    await fetchEvaluations();
   };
+
+  const columns = [
+    {
+      key: 'employee',
+      label: 'Employee',
+      width: '20%',
+      render: (evaluation) => (
+        <div>
+          <div className="font-semibold text-gray-900">
+            {evaluation.employee_details?.user_details?.full_name || evaluation.employee_details?.user_details?.username}
+          </div>
+          <div className="text-xs text-gray-500">{evaluation.employee_details?.position}</div>
+        </div>
+      )
+    },
+    {
+      key: 'period',
+      label: 'Period',
+      width: '15%',
+      render: (evaluation) => (
+        <div className="text-sm">
+          {new Date(evaluation.start_date).toLocaleDateString()} - {new Date(evaluation.end_date).toLocaleDateString()}
+        </div>
+      )
+    },
+    {
+      key: 'overall_rating',
+      label: 'Rating',
+      width: '15%',
+      render: (evaluation) => (
+        <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-xl border-2 ${getRatingColor(evaluation.overall_rating)}`}>
+          {getRatingIcon(evaluation.overall_rating)}
+          <span className="font-semibold capitalize">{evaluation.overall_rating_display}</span>
+        </div>
+      )
+    },
+    {
+      key: 'goals_achieved',
+      label: 'Goals',
+      width: '12%',
+      render: (evaluation) => (
+        <div className="text-sm">
+          <span className="font-semibold">{evaluation.goals_achieved}</span> / {evaluation.goals_total}
+        </div>
+      )
+    },
+    {
+      key: 'acknowledged',
+      label: 'Status',
+      width: '12%',
+      render: (evaluation) => evaluation.acknowledged_at ? (
+        <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-semibold">Acknowledged</span>
+      ) : (
+        <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-semibold">Pending</span>
+      )
+    },
+    {
+      key: 'reviewer',
+      label: 'Reviewer',
+      width: '15%',
+      render: (evaluation) => evaluation.reviewer_details?.full_name || evaluation.reviewer_details?.username || '-'
+    },
+    {
+      key: 'actions',
+      label: 'Actions',
+      width: '11%',
+      render: (evaluation) => (
+        <div className="flex gap-1">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedEval(evaluation);
+              setShowModal(true);
+            }}
+            className="p-1.5 hover:bg-blue-100 rounded-lg transition-colors"
+            title="View"
+          >
+            <Eye className="h-3 w-3 text-blue-600" />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleEdit(evaluation);
+            }}
+            className="p-1.5 hover:bg-indigo-100 rounded-lg transition-colors"
+            title="Edit"
+          >
+            <Edit className="h-3 w-3 text-indigo-600" />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setEvaluationToDelete(evaluation);
+              setShowDeleteConfirm(true);
+            }}
+            className="p-1.5 hover:bg-red-100 rounded-lg transition-colors"
+            title="Delete"
+          >
+            <Trash2 className="h-3 w-3 text-red-600" />
+          </button>
+        </div>
+      )
+    },
+  ];
 
   if (loading) {
     return (
@@ -114,343 +221,331 @@ export default function EvaluationsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl">
-              <Award className="h-8 w-8 text-white" />
-            </div>
-            Performance Evaluations
-          </h1>
-          <p className="text-gray-600 mt-1">Employee performance reviews and assessments</p>
-        </div>
-        <button
-          onClick={() => {
-            setSelectedEvaluation(null);
-            setShowForm(true);
-          }}
-          className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105"
-        >
-          <Plus className="h-5 w-5" />
-          New Evaluation
-        </button>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
+      <div className="space-y-6">
+        {/* Header */}
+        <PageHeader
+          icon={Award}
+          title="Performance Evaluations"
+          subtitle="Employee performance reviews and assessments"
+          actions={
+            <>
+              <ViewToggle view={view} onViewChange={setView} />
+              <Button
+                variant="primary"
+                icon={Plus}
+                onClick={() => {
+                  setSelectedEvaluation(null);
+                  setShowForm(true);
+                }}
+              >
+                New Evaluation
+              </Button>
+            </>
+          }
+        />
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl p-6 text-white shadow-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-green-100 text-sm">Outstanding</p>
-              <p className="text-3xl font-bold mt-1">
-                {evaluations.filter(e => e.overall_rating === 'outstanding').length}
-              </p>
-            </div>
-            <Star className="h-12 w-12 text-green-200" />
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-6 text-white shadow-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-blue-100 text-sm">Exceeds</p>
-              <p className="text-3xl font-bold mt-1">
-                {evaluations.filter(e => e.overall_rating === 'exceeds').length}
-              </p>
-            </div>
-            <TrendingUp className="h-12 w-12 text-blue-200" />
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-2xl p-6 text-white shadow-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-yellow-100 text-sm">Meets</p>
-              <p className="text-3xl font-bold mt-1">
-                {evaluations.filter(e => e.overall_rating === 'meets').length}
-              </p>
-            </div>
-            <CheckCircle className="h-12 w-12 text-yellow-200" />
-          </div>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <StatCard
+            icon={Star}
+            label="Outstanding"
+            value={evaluations.filter(e => e.overall_rating === 'outstanding').length}
+            gradient="green"
+          />
+          <StatCard
+            icon={TrendingUp}
+            label="Exceeds"
+            value={evaluations.filter(e => e.overall_rating === 'exceeds').length}
+            gradient="blue"
+          />
+          <StatCard
+            icon={CheckCircle}
+            label="Meets"
+            value={evaluations.filter(e => e.overall_rating === 'meets').length}
+            gradient="yellow"
+          />
+          <StatCard
+            icon={Award}
+            label="Acknowledged"
+            value={evaluations.filter(e => e.employee_acknowledged).length}
+            gradient="purple"
+          />
         </div>
 
-        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl p-6 text-white shadow-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-purple-100 text-sm">Acknowledged</p>
-              <p className="text-3xl font-bold mt-1">
-                {evaluations.filter(e => e.employee_acknowledged).length}
-              </p>
-            </div>
-            <Award className="h-12 w-12 text-purple-200" />
-          </div>
-        </div>
-      </div>
-
-      {/* Evaluations List */}
-      {evaluations.length === 0 ? (
-        <div className="text-center py-12 bg-white/50 backdrop-blur-sm rounded-2xl border border-white/20">
-          <Award className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600 text-lg">No evaluations found</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-6">
-          {evaluations.map((evaluation) => (
-            <div
-              key={evaluation.id}
-              className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-white/20 hover:shadow-xl transition-all duration-200"
-            >
-              {/* Evaluation Header */}
-              <div className="flex items-start justify-between mb-6">
-                <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center text-white font-bold text-xl">
-                    {evaluation.employee_name?.charAt(0) || 'E'}
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-lg text-gray-900">{evaluation.employee_name}</h3>
-                    <div className="flex items-center gap-3 text-sm text-gray-600 mt-1">
-                      <span className="flex items-center gap-1">
-                        <Calendar className="h-4 w-4" />
-                        {evaluation.period_type_display}
-                      </span>
-                      <span>
-                        {new Date(evaluation.period_start).toLocaleDateString()} - {new Date(evaluation.period_end).toLocaleDateString()}
-                      </span>
+        {/* Evaluations List */}
+        {evaluations.length === 0 ? (
+          <EmptyState
+            icon={Award}
+            title="No evaluations found"
+            description="Start by creating your first evaluation"
+            action={
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setSelectedEvaluation(null);
+                  setShowForm(true);
+                }}
+              >
+                New Evaluation
+              </Button>
+            }
+          />
+        ) : view === 'list' ? (
+          <Table columns={columns} data={evaluations} />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {evaluations.map((evaluation) => (
+              <div
+                key={evaluation.id}
+                className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-white/20 hover:shadow-xl transition-all duration-200"
+              >
+                {/* Evaluation Header */}
+                <div className="flex items-start justify-between mb-6">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center text-white font-bold text-xl">
+                      {evaluation.employee_name?.charAt(0) || 'E'}
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-lg text-gray-900">{evaluation.employee_name}</h3>
+                      <div className="flex items-center gap-3 text-sm text-gray-600 mt-1">
+                        <span className="flex items-center gap-1">
+                          <Calendar className="h-4 w-4" />
+                          {evaluation.period_type_display}
+                        </span>
+                        <span>
+                          {new Date(evaluation.period_start).toLocaleDateString()} - {new Date(evaluation.period_end).toLocaleDateString()}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="flex flex-col items-end gap-2">
-                  <div className={`px-4 py-2 rounded-xl border-2 flex items-center gap-2 ${getRatingColor(evaluation.overall_rating)}`}>
-                    {getRatingIcon(evaluation.overall_rating)}
-                    <span className="font-bold">{evaluation.overall_rating_display}</span>
-                  </div>
-                  {evaluation.employee_acknowledged ? (
-                    <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs flex items-center gap-1">
-                      <CheckCircle className="h-3 w-3" />
-                      Acknowledged
-                    </span>
-                  ) : (
-                    <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs">
-                      Pending Acknowledgment
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Evaluation Details Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                {/* Strengths */}
-                <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-                  <h4 className="font-semibold text-green-900 mb-2 flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4" />
-                    Strengths
-                  </h4>
-                  <p className="text-sm text-gray-700">{evaluation.strengths}</p>
-                </div>
-
-                {/* Areas for Improvement */}
-                <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
-                  <h4 className="font-semibold text-orange-900 mb-2 flex items-center gap-2">
-                    <TrendingUp className="h-4 w-4" />
-                    Areas for Improvement
-                  </h4>
-                  <p className="text-sm text-gray-700">{evaluation.areas_for_improvement}</p>
-                </div>
-
-                {/* Achievements */}
-                <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                  <h4 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
-                    <Award className="h-4 w-4" />
-                    Achievements
-                  </h4>
-                  <p className="text-sm text-gray-700">{evaluation.achievements}</p>
-                </div>
-
-                {/* Goals Next Period */}
-                <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
-                  <h4 className="font-semibold text-purple-900 mb-2 flex items-center gap-2">
-                    <Star className="h-4 w-4" />
-                    Goals Next Period
-                  </h4>
-                  <p className="text-sm text-gray-700">{evaluation.goals_next_period}</p>
-                </div>
-              </div>
-
-              {/* Recommendations */}
-              {(evaluation.promotion_recommended || evaluation.salary_increase_recommended) && (
-                <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg p-4 border border-purple-200 mb-4">
-                  <h4 className="font-semibold text-purple-900 mb-2">Recommendations</h4>
-                  <div className="flex gap-3">
-                    {evaluation.promotion_recommended && (
-                      <span className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm">
-                        ⭐ Promotion Recommended
+                  <div className="flex flex-col items-end gap-2">
+                    <div className={`px-4 py-2 rounded-xl border-2 flex items-center gap-2 ${getRatingColor(evaluation.overall_rating)}`}>
+                      {getRatingIcon(evaluation.overall_rating)}
+                      <span className="font-bold">{evaluation.overall_rating_display}</span>
+                    </div>
+                    {evaluation.employee_acknowledged ? (
+                      <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs flex items-center gap-1">
+                        <CheckCircle className="h-3 w-3" />
+                        Acknowledged
                       </span>
-                    )}
-                    {evaluation.salary_increase_recommended && (
-                      <span className="px-3 py-1 bg-pink-100 text-pink-800 rounded-full text-sm">
-                        💰 Salary Increase: {evaluation.recommended_increase_percentage}%
+                    ) : (
+                      <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs">
+                        Pending Acknowledgment
                       </span>
                     )}
                   </div>
                 </div>
+
+                {/* Evaluation Details Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                    <h4 className="font-semibold text-green-900 mb-2 flex items-center gap-2">
+                      <CheckCircle className="h-4 w-4" />
+                      Strengths
+                    </h4>
+                    <p className="text-sm text-gray-700">{evaluation.strengths}</p>
+                  </div>
+
+                  <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
+                    <h4 className="font-semibold text-orange-900 mb-2 flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4" />
+                      Areas for Improvement
+                    </h4>
+                    <p className="text-sm text-gray-700">{evaluation.areas_for_improvement}</p>
+                  </div>
+
+                  <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                    <h4 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
+                      <Award className="h-4 w-4" />
+                      Achievements
+                    </h4>
+                    <p className="text-sm text-gray-700">{evaluation.achievements}</p>
+                  </div>
+
+                  <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
+                    <h4 className="font-semibold text-purple-900 mb-2 flex items-center gap-2">
+                      <Star className="h-4 w-4" />
+                      Goals Next Period
+                    </h4>
+                    <p className="text-sm text-gray-700">{evaluation.goals_next_period}</p>
+                  </div>
+                </div>
+
+                {/* Recommendations */}
+                {(evaluation.promotion_recommended || evaluation.salary_increase_recommended) && (
+                  <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg p-4 border border-purple-200 mb-4">
+                    <h4 className="font-semibold text-purple-900 mb-2">Recommendations</h4>
+                    <div className="flex gap-3">
+                      {evaluation.promotion_recommended && (
+                        <span className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm">
+                          ⭐ Promotion Recommended
+                        </span>
+                      )}
+                      {evaluation.salary_increase_recommended && (
+                        <span className="px-3 py-1 bg-pink-100 text-pink-800 rounded-full text-sm">
+                          💰 Salary Increase: {evaluation.recommended_increase_percentage}%
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Evaluator Info */}
+                <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <User className="h-4 w-4" />
+                    <span>Evaluated by: {evaluation.evaluator_name}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {!evaluation.employee_acknowledged && (
+                      <button
+                        onClick={() => {
+                          setSelectedEval(evaluation);
+                          setShowModal(true);
+                        }}
+                        className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all font-semibold shadow-lg hover:shadow-xl flex items-center gap-2"
+                      >
+                        <CheckCircle className="h-5 w-5" />
+                        Acknowledge
+                      </button>
+                    )}
+                    {evaluation.employee_acknowledged && evaluation.employee_comments && (
+                      <button
+                        onClick={() => {
+                          setSelectedEval(evaluation);
+                          setShowModal(true);
+                        }}
+                        className="px-6 py-3 bg-white/80 backdrop-blur-sm text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all font-semibold shadow-md hover:shadow-lg flex items-center gap-2"
+                      >
+                        <Eye className="h-5 w-5" />
+                        View Comments
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="mt-4 pt-4 border-t border-gray-200 flex gap-2">
+                  <button
+                    onClick={() => handleEdit(evaluation)}
+                    className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all font-semibold shadow-lg hover:shadow-xl hover:scale-105 flex items-center justify-center gap-2"
+                  >
+                    <Edit className="h-5 w-5" />
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEvaluationToDelete(evaluation);
+                      setShowDeleteConfirm(true);
+                    }}
+                    className="flex-1 px-6 py-3 bg-gradient-to-r from-red-600 to-pink-600 text-white rounded-xl hover:from-red-700 hover:to-pink-700 transition-all font-semibold shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                  >
+                    <Trash2 className="h-5 w-5" />
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Acknowledge Modal */}
+        {showModal && selectedEval && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
+              <h3 className="text-xl font-bold text-gray-900 mb-4">
+                {selectedEval.employee_acknowledged ? 'Employee Comments' : 'Acknowledge Evaluation'}
+              </h3>
+
+              {selectedEval.employee_acknowledged ? (
+                <div className="mb-4">
+                  <p className="text-gray-700">{selectedEval.employee_comments || 'No comments provided'}</p>
+                  <p className="text-sm text-gray-500 mt-2">
+                    Acknowledged on {new Date(selectedEval.employee_acknowledged_at).toLocaleString()}
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <p className="text-gray-600 mb-4">
+                    Please add your comments on this evaluation (optional):
+                  </p>
+                  <textarea
+                    value={acknowledgeComments}
+                    onChange={(e) => setAcknowledgeComments(e.target.value)}
+                    className="w-full border-2 border-gray-300 rounded-xl p-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    rows="4"
+                    placeholder="Your comments..."
+                  />
+                </>
               )}
 
-              {/* Evaluator Info */}
-              <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <User className="h-4 w-4" />
-                  <span>Evaluated by: {evaluation.evaluator_name}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  {!evaluation.employee_acknowledged && (
-                    <button
-                      onClick={() => {
-                        setSelectedEval(evaluation);
-                        setShowModal(true);
-                      }}
-                      className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium flex items-center gap-2"
-                    >
-                      <CheckCircle className="h-4 w-4" />
-                      Acknowledge
-                    </button>
-                  )}
-                  {evaluation.employee_acknowledged && evaluation.employee_comments && (
-                    <button
-                      onClick={() => {
-                        setSelectedEval(evaluation);
-                        setShowModal(true);
-                      }}
-                      className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm font-medium flex items-center gap-2"
-                    >
-                      <Eye className="h-4 w-4" />
-                      View Comments
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="mt-4 pt-4 border-t border-gray-200 flex gap-2">
+              <div className="flex gap-3 mt-6">
+                {!selectedEval.employee_acknowledged && (
+                  <button
+                    onClick={() => handleAcknowledge(selectedEval.id)}
+                    className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all font-semibold shadow-lg hover:shadow-xl"
+                  >
+                    Acknowledge
+                  </button>
+                )}
                 <button
-                  onClick={() => handleEdit(evaluation)}
-                  className="flex-1 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium flex items-center justify-center gap-2"
+                  onClick={() => {
+                    setShowModal(false);
+                    setSelectedEval(null);
+                    setAcknowledgeComments('');
+                  }}
+                  className="flex-1 px-6 py-3 bg-white/80 backdrop-blur-sm text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all font-semibold shadow-md hover:shadow-lg"
                 >
-                  <Edit className="h-4 w-4" />
-                  Edit
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Evaluation Form Modal */}
+        {showForm && (
+          <EvaluationForm
+            evaluation={selectedEvaluation}
+            onClose={() => {
+              setShowForm(false);
+              setSelectedEvaluation(null);
+            }}
+            onSuccess={handleFormSuccess}
+          />
+        )}
+
+        {/* Delete Confirmation Modal */}
+        {showDeleteConfirm && evaluationToDelete && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
+              <h3 className="text-xl font-bold text-gray-900 mb-4">Confirm Delete</h3>
+              <p className="text-gray-600 mb-6">
+                Are you sure you want to delete the evaluation for <span className="font-semibold">{evaluationToDelete.employee_name}</span>?
+                This action cannot be undone.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={handleDelete}
+                  className="flex-1 px-6 py-3 bg-gradient-to-r from-red-600 to-pink-600 text-white rounded-xl hover:from-red-700 hover:to-pink-700 transition-all font-semibold shadow-lg hover:shadow-xl"
+                >
+                  Delete
                 </button>
                 <button
                   onClick={() => {
-                    setEvaluationToDelete(evaluation);
-                    setShowDeleteConfirm(true);
+                    setShowDeleteConfirm(false);
+                    setEvaluationToDelete(null);
                   }}
-                  className="flex-1 px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium flex items-center justify-center gap-2"
+                  className="flex-1 px-6 py-3 bg-white/80 backdrop-blur-sm text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all font-semibold shadow-md hover:shadow-lg"
                 >
-                  <Trash2 className="h-4 w-4" />
-                  Delete
+                  Cancel
                 </button>
               </div>
             </div>
-          ))}
-        </div>
-      )}
-
-      {/* Acknowledge Modal */}
-      {showModal && selectedEval && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
-            <h3 className="text-xl font-bold text-gray-900 mb-4">
-              {selectedEval.employee_acknowledged ? 'Employee Comments' : 'Acknowledge Evaluation'}
-            </h3>
-
-            {selectedEval.employee_acknowledged ? (
-              <div className="mb-4">
-                <p className="text-gray-700">{selectedEval.employee_comments || 'No comments provided'}</p>
-                <p className="text-sm text-gray-500 mt-2">
-                  Acknowledged on {new Date(selectedEval.employee_acknowledged_at).toLocaleString()}
-                </p>
-              </div>
-            ) : (
-              <>
-                <p className="text-gray-600 mb-4">
-                  Please add your comments on this evaluation (optional):
-                </p>
-                <textarea
-                  value={acknowledgeComments}
-                  onChange={(e) => setAcknowledgeComments(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  rows="4"
-                  placeholder="Your comments..."
-                />
-              </>
-            )}
-
-            <div className="flex gap-3 mt-6">
-              {!selectedEval.employee_acknowledged && (
-                <button
-                  onClick={() => handleAcknowledge(selectedEval.id)}
-                  className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
-                >
-                  Acknowledge
-                </button>
-              )}
-              <button
-                onClick={() => {
-                  setShowModal(false);
-                  setSelectedEval(null);
-                  setAcknowledgeComments('');
-                }}
-                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
-              >
-                Close
-              </button>
-            </div>
           </div>
-        </div>
-      )}
-
-      {/* Evaluation Form Modal */}
-      {showForm && (
-        <EvaluationForm
-          evaluation={selectedEvaluation}
-          onClose={() => {
-            setShowForm(false);
-            setSelectedEvaluation(null);
-          }}
-          onSuccess={handleFormSuccess}
-        />
-      )}
-
-      {/* Delete Confirmation Modal */}
-      {showDeleteConfirm && evaluationToDelete && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Confirm Delete</h3>
-            <p className="text-gray-600 mb-6">
-              Are you sure you want to delete the evaluation for <span className="font-semibold">{evaluationToDelete.employee_name}</span>?
-              This action cannot be undone.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={handleDelete}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
-              >
-                Delete
-              </button>
-              <button
-                onClick={() => {
-                  setShowDeleteConfirm(false);
-                  setEvaluationToDelete(null);
-                }}
-                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

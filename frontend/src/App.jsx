@@ -11,8 +11,14 @@ import Layout from './components/layout/Layout';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import ProjectsPage from './pages/ProjectsPage';
+import TopicsPage from './pages/TopicsPage';
+import DesignRulesPage from './pages/DesignRulesPage';
+import ProjectDetail from './pages/ProjectDetail';
 import TasksPage from './pages/TasksPage';
 import UsersPage from './pages/UsersPage';
+import TaskDetailPage from './pages/TaskDetailPage';
+import UserDetailPage from './pages/UserDetailPage';
+import ProfilePage from './pages/ProfilePage';
 
 // HR Pages
 import EmployeesPage from './pages/hr/EmployeesPage';
@@ -21,7 +27,19 @@ import CareerPathsPage from './pages/hr/CareerPathsPage';
 import KPIPage from './pages/hr/KPIPage';
 import EvaluationsPage from './pages/hr/EvaluationsPage';
 import SalaryReviewsPage from './pages/hr/SalaryReviewsPage';
+import FreelancerEarningsPage from './pages/hr/FreelancerEarningsPage';
 import PersonalReportsPage from './pages/hr/PersonalReportsPage';
+import PlansPage from './pages/hr/PlansPage';
+import DepartmentDetailPage from './pages/hr/DepartmentDetailPage';
+import CareerPathDetailPage from './pages/hr/CareerPathDetailPage';
+import PersonalReportDetailPage from './pages/hr/PersonalReportDetailPage';
+import PlanDetailPage from './pages/hr/PlanDetailPage';
+
+// CRM Pages
+import CRMDashboardPage from './pages/crm/CRMDashboardPage';
+import CustomersPage from './pages/crm/CustomersPage';
+import CustomerStagesPage from './pages/crm/settings/CustomerStagesPage';
+import ExpenseTypesPage from './pages/crm/settings/ExpenseTypesPage';
 
 // Create QueryClient
 const queryClient = new QueryClient({
@@ -63,15 +81,34 @@ function App() {
                   <Routes>
                     <Route path="/" element={<DashboardPage />} />
                     <Route path="/projects" element={<ProjectsPage />} />
+                    <Route path="/topics" element={<TopicsPage />} />
+                    <Route path="/design-rules" element={<DesignRulesPage />} />
+                    <Route path="/projects/:id" element={<ProjectDetail />} />
                     <Route path="/tasks" element={<TasksPage />} />
+                    <Route path="/tasks/:id" element={<TaskDetailPage />} />
                     <Route path="/users" element={<UsersPage />} />
+                    <Route path="/users/:id" element={<UserDetailPage />} />
+                    <Route path="/profile" element={<ProfilePage />} />
                     <Route path="/hr/employees" element={<EmployeesPage />} />
                     <Route path="/hr/departments" element={<DepartmentsPage />} />
+                    <Route path="/hr/departments/:id" element={<DepartmentDetailPage />} />
                     <Route path="/hr/career-paths" element={<CareerPathsPage />} />
+                    <Route path="/hr/career-paths/:id" element={<CareerPathDetailPage />} />
                     <Route path="/hr/kpi" element={<KPIPage />} />
                     <Route path="/hr/evaluations" element={<EvaluationsPage />} />
                     <Route path="/hr/salary-reviews" element={<SalaryReviewsPage />} />
+                    <Route path="/hr/money" element={<FreelancerEarningsPage />} />
                     <Route path="/hr/reports" element={<PersonalReportsPage />} />
+                    <Route path="/hr/reports/:id" element={<PersonalReportDetailPage />} />
+                    <Route path="/hr/plans" element={<PlansPage />} />
+                    <Route path="/hr/plans/:id" element={<PlanDetailPage />} />
+
+                    {/* CRM Routes */}
+                    <Route path="/crm" element={<CRMDashboardPage />} />
+                    <Route path="/crm/customers" element={<CustomersPage />} />
+                    <Route path="/crm/settings/stages" element={<CustomerStagesPage />} />
+                    <Route path="/crm/settings/expense-types" element={<ExpenseTypesPage />} />
+
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
                 </Layout>

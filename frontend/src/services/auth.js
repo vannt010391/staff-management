@@ -3,6 +3,24 @@ import { STORAGE_KEYS } from '../constants';
 
 // Authentication service
 export const authService = {
+    buildPayload(data = {}) {
+      const hasFile = Object.values(data).some((value) => value instanceof File || value instanceof Blob);
+      if (!hasFile) return data;
+
+      const formData = new FormData();
+      Object.entries(data).forEach(([key, value]) => {
+        if (value === undefined || value === null) return;
+        formData.append(key, value);
+      });
+      return formData;
+    },
+
+  clearAuthStorage() {
+    localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
+    localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
+    localStorage.removeItem(STORAGE_KEYS.USER);
+  },
+
   // Login
   async login(credentials) {
     const response = await api.post('/auth/login/', credentials);
@@ -25,27 +43,32 @@ export const authService = {
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
-      // Clear local storage regardless
-      localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
-      localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
-      localStorage.removeItem(STORAGE_KEYS.USER);
+      this.clearAuthStorage();
     }
   },
 
   // Get current user
   async getCurrentUser() {
-    const response = await api.get('/auth/me/');
-    const user = response.data;
+    try {
+      const response = await api.get('/auth/me/');
+      const user = response.data;
 
-    // Update user in localStorage
-    localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user));
-
-    return user;
+      localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user));
+      return user;
+    } catch (error) {
+      if (error.response?.status === 401) {
+        this.clearAuthStorage();
+      }
+      throw error;
+    }
   },
 
   // Update profile
   async updateProfile(data) {
-    const response = await api.put('/auth/profile/', data);
+    const payload = this.buildPayload(data);
+    const response = await api.put('/auth/profile/', payload, payload instanceof FormData ? {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    } : undefined);
     const user = response.data.user;
 
     // Update user in localStorage
@@ -68,7 +91,14 @@ export const authService = {
   // Get user from localStorage
   getUser() {
     const userStr = localStorage.getItem(STORAGE_KEYS.USER);
-    return userStr ? JSON.parse(userStr) : null;
+    if (!userStr) return null;
+
+    try {
+      return JSON.parse(userStr);
+    } catch {
+      this.clearAuthStorage();
+      return null;
+    }
   },
 };
 

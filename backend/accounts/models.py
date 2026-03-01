@@ -25,6 +25,45 @@ class User(AbstractUser):
         blank=True,
         help_text='Số điện thoại liên hệ'
     )
+    bank_name = models.CharField(
+        max_length=150,
+        blank=True,
+        help_text='Tên ngân hàng'
+    )
+    bank_account_number = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text='Số tài khoản ngân hàng'
+    )
+    bank_account_holder = models.CharField(
+        max_length=150,
+        blank=True,
+        help_text='Tên chủ tài khoản'
+    )
+    bank_branch = models.CharField(
+        max_length=150,
+        blank=True,
+        help_text='Chi nhánh ngân hàng'
+    )
+    bank_qr_code = models.ImageField(
+        upload_to='bank_qr_codes/',
+        null=True,
+        blank=True,
+        help_text='Mã QR tài khoản ngân hàng'
+    )
+    date_of_birth = models.DateField(
+        null=True,
+        blank=True,
+        help_text='Ngày sinh'
+    )
+    address = models.TextField(
+        blank=True,
+        help_text='Địa chỉ'
+    )
+    bio = models.TextField(
+        blank=True,
+        help_text='Mô tả ngắn về người dùng'
+    )
     avatar = models.ImageField(
         upload_to='avatars/',
         null=True,

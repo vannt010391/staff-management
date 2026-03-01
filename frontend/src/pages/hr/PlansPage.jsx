@@ -1,0 +1,446 @@
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Calendar, Plus, Filter, TrendingUp, Target, Clock, CheckCircle2, Eye, Edit, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
+import plansService from '../../services/plans';
+import PlanForm from '../../components/hr/PlanForm';
+import { PageHeader, StatCard, Button, EmptyState, Table, ViewToggle } from '../../components/ui';
+
+export default function PlansPage() {
+  const navigate = useNavigate();
+  const [plans, setPlans] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState(null);
+  const [view, setView] = useState('list');
+
+  // Filters
+  const [filterType, setFilterType] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+
+  useEffect(() => {
+    fetchPlans();
+  }, []);
+
+  const fetchPlans = async () => {
+    try {
+      setLoading(true);
+      const data = await plansService.getMyPlans();
+      setPlans(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Error fetching plans:', error);
+      toast.error('Failed to load plans');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm('Are you sure you want to delete this plan?')) return;
+
+    try {
+      await plansService.deletePlan(id);
+      toast.success('Plan deleted successfully');
+      fetchPlans();
+    } catch (error) {
+      console.error('Error deleting plan:', error);
+      toast.error('Failed to delete plan');
+    }
+  };
+
+  const handleEdit = (plan) => {
+    setSelectedPlan(plan);
+    setShowForm(true);
+  };
+
+  const handleView = (plan) => {
+    navigate(`/hr/plans/${plan.id}`);
+  };
+
+  const filteredPlans = plans.filter(plan => {
+    if (filterType && plan.plan_type !== filterType) return false;
+    if (filterStatus && plan.status !== filterStatus) return false;
+    return true;
+  });
+
+  // Stats
+  const stats = {
+    total: plans.length,
+    active: plans.filter(p => p.status === 'active').length,
+    completed: plans.filter(p => p.status === 'completed').length,
+    avgCompletion: plans.length > 0
+      ? Math.round(plans.reduce((sum, p) => sum + p.completion_percentage, 0) / plans.length)
+      : 0
+  };
+
+  const getPlanTypeColor = (type) => {
+    const colors = {
+      'daily': 'bg-blue-100 text-blue-800',
+      'weekly': 'bg-green-100 text-green-800',
+      'monthly': 'bg-purple-100 text-purple-800',
+      'yearly': 'bg-orange-100 text-orange-800',
+    };
+    return colors[type] || 'bg-gray-100 text-gray-800';
+  };
+
+  const getStatusColor = (status) => {
+    const colors = {
+      'active': 'bg-green-100 text-green-800',
+      'completed': 'bg-purple-100 text-purple-800',
+      'draft': 'bg-gray-100 text-gray-800',
+      'archived': 'bg-orange-100 text-orange-800',
+    };
+    return colors[status] || 'bg-gray-100 text-gray-800';
+  };
+
+  const columns = [
+    {
+      key: 'title',
+      label: 'Plan Title',
+      width: '25%',
+      render: (plan) => (
+        <div>
+          <div className="font-semibold text-gray-900">{plan.title}</div>
+          {plan.user_name && (
+            <div className="text-xs text-purple-600">{plan.user_name}</div>
+          )}
+        </div>
+      )
+    },
+    {
+      key: 'plan_type',
+      label: 'Type',
+      width: '12%',
+      render: (plan) => (
+        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPlanTypeColor(plan.plan_type)}`}>
+          {plan.plan_type_display}
+        </span>
+      )
+    },
+    {
+      key: 'period',
+      label: 'Period',
+      width: '20%',
+      render: (plan) => (
+        <div className="text-sm">
+          {new Date(plan.period_start).toLocaleDateString()} - {new Date(plan.period_end).toLocaleDateString()}
+        </div>
+      )
+    },
+    {
+      key: 'progress',
+      label: 'Progress',
+      width: '15%',
+      render: (plan) => (
+        <div>
+          <div className="text-xs text-gray-600 mb-1">{plan.completion_percentage}%</div>
+          <div className="w-full bg-gray-200 rounded-full h-1.5">
+            <div
+              className="bg-gradient-to-r from-purple-600 to-pink-600 h-1.5 rounded-full"
+              style={{ width: `${plan.completion_percentage}%` }}
+            />
+          </div>
+        </div>
+      )
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      width: '12%',
+      render: (plan) => (
+        <div className="space-y-1">
+          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(plan.status)}`}>
+            {plan.status_display}
+          </span>
+          {plan.is_active_period && (
+            <div className="flex items-center gap-1 text-xs text-green-600">
+              <Clock className="w-3 h-3" />
+              <span>Active</span>
+            </div>
+          )}
+        </div>
+      )
+    },
+    {
+      key: 'actions',
+      label: 'Actions',
+      width: '16%',
+      render: (plan) => (
+        <div className="flex gap-1">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleView(plan);
+            }}
+            className="p-1.5 hover:bg-indigo-100 rounded-lg transition-colors"
+            title="View"
+          >
+            <Eye className="h-3 w-3 text-indigo-600" />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleEdit(plan);
+            }}
+            className="p-1.5 hover:bg-blue-100 rounded-lg transition-colors"
+            title="Edit"
+          >
+            <Edit className="h-3 w-3 text-blue-600" />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDelete(plan.id);
+            }}
+            className="p-1.5 hover:bg-red-100 rounded-lg transition-colors"
+            title="Delete"
+          >
+            <Trash2 className="h-3 w-3 text-red-600" />
+          </button>
+        </div>
+      )
+    },
+  ];
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
+      <div className="space-y-6">
+        {/* Header */}
+        <PageHeader
+          icon={Target}
+          title="My Plans"
+          subtitle="Track your goals and progress"
+          actions={
+            <>
+              <ViewToggle view={view} onViewChange={setView} />
+              <Button
+                variant="primary"
+                icon={Plus}
+                onClick={() => {
+                  setSelectedPlan(null);
+                  setShowForm(true);
+                }}
+              >
+                New Plan
+              </Button>
+            </>
+          }
+        />
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <StatCard
+            icon={Calendar}
+            label="Total Plans"
+            value={stats.total}
+            gradient="blue"
+          />
+          <StatCard
+            icon={Clock}
+            label="Active Plans"
+            value={stats.active}
+            gradient="green"
+          />
+          <StatCard
+            icon={CheckCircle2}
+            label="Completed"
+            value={stats.completed}
+            gradient="purple"
+          />
+          <StatCard
+            icon={TrendingUp}
+            label="Avg Progress"
+            value={`${stats.avgCompletion}%`}
+            gradient="yellow"
+          />
+        </div>
+
+        {/* Filters */}
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 border border-white/20 shadow-lg">
+          <div className="flex flex-wrap items-center gap-4">
+            <Filter className="w-5 h-5 text-gray-400" />
+
+            <select
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+              className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all bg-white"
+            >
+              <option value="">All Types</option>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+              <option value="yearly">Yearly</option>
+            </select>
+
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all bg-white"
+            >
+              <option value="">All Status</option>
+              <option value="draft">Draft</option>
+              <option value="active">Active</option>
+              <option value="completed">Completed</option>
+              <option value="archived">Archived</option>
+            </select>
+
+            {(filterType || filterStatus) && (
+              <button
+                onClick={() => {
+                  setFilterType('');
+                  setFilterStatus('');
+                }}
+                className="text-sm text-gray-600 hover:text-gray-900 font-medium"
+              >
+                Clear Filters
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Plans Grid/List */}
+        {filteredPlans.length === 0 ? (
+          <EmptyState
+            icon={Target}
+            title="No plans found"
+            description="Start by creating your first plan"
+            action={
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setSelectedPlan(null);
+                  setShowForm(true);
+                }}
+              >
+                Create Plan
+              </Button>
+            }
+          />
+        ) : view === 'list' ? (
+          <Table columns={columns} data={filteredPlans} />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredPlans.map(plan => (
+            <div
+              key={plan.id}
+              className="bg-white/80 backdrop-blur-sm rounded-2xl border border-white/20 shadow-lg hover:shadow-xl transition-all duration-200 overflow-hidden"
+            >
+            {/* Plan Type Badge */}
+            <div className={`h-2 ${
+              plan.plan_type === 'daily' ? 'bg-blue-500' :
+              plan.plan_type === 'weekly' ? 'bg-green-500' :
+              plan.plan_type === 'monthly' ? 'bg-purple-500' :
+              'bg-orange-500'
+            }`} />
+
+            <div className="p-6">
+              {/* Header */}
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex-1">
+                  <h3 className="font-semibold text-lg text-gray-900 mb-1">
+                    {plan.title}
+                  </h3>
+                  {plan.user_name && (
+                    <div className="text-sm text-purple-600 font-medium mb-1">
+                      {plan.user_name}
+                    </div>
+                  )}
+                  <div className="flex items-center space-x-2 text-sm text-gray-600">
+                    <span className="capitalize">{plan.plan_type_display}</span>
+                    <span>•</span>
+                    <span>
+                      {new Date(plan.period_start).toLocaleDateString()} - {new Date(plan.period_end).toLocaleDateString()}
+                    </span>
+                  </div>
+                </div>
+
+                <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                  plan.status === 'active' ? 'bg-green-100 text-green-800' :
+                  plan.status === 'completed' ? 'bg-purple-100 text-purple-800' :
+                  plan.status === 'draft' ? 'bg-gray-100 text-gray-800' :
+                  'bg-orange-100 text-orange-800'
+                }`}>
+                  {plan.status_display}
+                </span>
+              </div>
+
+              {/* Progress Bar */}
+              <div className="mb-4">
+                <div className="flex items-center justify-between text-sm mb-2">
+                  <span className="text-gray-600">Progress</span>
+                  <span className="font-semibold text-gray-900">{plan.completion_percentage}%</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div
+                    className="bg-gradient-to-r from-purple-600 to-pink-600 h-2 rounded-full transition-all"
+                    style={{ width: `${plan.completion_percentage}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Active Period Indicator */}
+              {plan.is_active_period && (
+                <div className="flex items-center space-x-2 text-sm text-green-600 mb-4">
+                  <Clock className="w-4 h-4" />
+                  <span>Currently active</span>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  onClick={() => handleEdit(plan)}
+                  className="p-2 hover:bg-blue-100 rounded-lg transition-colors"
+                  title="Edit"
+                >
+                  <Edit className="h-4 w-4 text-blue-600" />
+                </button>
+                <button
+                  onClick={() => handleView(plan)}
+                  className="p-2 hover:bg-indigo-100 rounded-lg transition-colors"
+                  title="View"
+                >
+                  <Eye className="h-4 w-4 text-indigo-600" />
+                </button>
+                <button
+                  onClick={() => handleDelete(plan.id)}
+                  className="p-2 hover:bg-red-100 rounded-lg transition-colors"
+                  title="Delete"
+                >
+                  <Trash2 className="h-4 w-4 text-red-600" />
+                </button>
+              </div>
+            </div>
+          </div>
+            ))}
+          </div>
+        )}
+
+        {/* Modals */}
+        {showForm && (
+          <PlanForm
+            plan={selectedPlan}
+            onClose={() => {
+              setShowForm(false);
+              setSelectedPlan(null);
+            }}
+            onSuccess={async () => {
+              await fetchPlans();
+              setShowForm(false);
+              setSelectedPlan(null);
+            }}
+          />
+        )}
+
+      </div>
+    </div>
+  );
+}

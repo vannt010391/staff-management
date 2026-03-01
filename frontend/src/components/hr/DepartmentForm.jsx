@@ -59,7 +59,7 @@ export default function DepartmentForm({ department = null, onClose, onSuccess }
       });
 
       toast.success(`Department ${department ? 'updated' : 'created'} successfully`);
-      onSuccess();
+      await onSuccess();
       onClose();
     } catch (error) {
       console.error('Error saving department:', error);

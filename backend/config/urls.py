@@ -39,6 +39,7 @@ urlpatterns = [
     path('api/', include('reviews.urls')),
     path('api/', include('notifications.urls')),
     path('api/hr/', include('hr.urls')),
+    path('api/crm/', include('crm.urls')),
     # path('api/', include('analytics.urls')),  # Will be added later
 ]
 

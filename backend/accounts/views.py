@@ -12,7 +12,8 @@ from .serializers import (
     UserCreateSerializer,
     UserUpdateSerializer,
     ChangePasswordSerializer,
-    LoginSerializer
+    LoginSerializer,
+    UserSetPasswordSerializer,
 )
 from .permissions import IsAdmin, IsOwnerOrAdmin
 
@@ -167,3 +168,17 @@ class UserViewSet(viewsets.ModelViewSet):
             'message': f'User {"activated" if user.is_active else "deactivated"} successfully',
             'user': UserSerializer(user).data
         })
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAdmin], url_path='change-password')
+    def change_password(self, request, pk=None):
+        """Admin changes password for a specific user"""
+        user = self.get_object()
+        serializer = UserSetPasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        user.set_password(serializer.validated_data['new_password'])
+        user.save(update_fields=['password'])
+
+        return Response({
+            'message': 'Password changed successfully'
+        }, status=status.HTTP_200_OK)

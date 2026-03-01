@@ -21,10 +21,12 @@ class IsManagerOrAdmin(permissions.BasePermission):
 
     def has_permission(self, request, view):
         return (
-            request.user and
-            request.user.is_authenticated and
-            request.user.role in ['admin', 'manager'] or
-            request.user.is_superuser
+            request.user
+            and request.user.is_authenticated
+            and (
+                request.user.role in ['admin', 'manager']
+                or request.user.is_superuser
+            )
         )
 
 
@@ -89,10 +91,12 @@ class CanCreateTask(permissions.BasePermission):
     """
     def has_permission(self, request, view):
         return (
-            request.user and
-            request.user.is_authenticated and
-            request.user.role in ['admin', 'manager', 'team_lead', 'staff'] or
-            request.user.is_superuser
+            request.user
+            and request.user.is_authenticated
+            and (
+                request.user.role in ['admin', 'manager', 'team_lead', 'staff']
+                or request.user.is_superuser
+            )
         )
 
 
@@ -103,10 +107,12 @@ class CanAssignTask(permissions.BasePermission):
     """
     def has_permission(self, request, view):
         return (
-            request.user and
-            request.user.is_authenticated and
-            request.user.role in ['admin', 'manager', 'team_lead', 'staff'] or
-            request.user.is_superuser
+            request.user
+            and request.user.is_authenticated
+            and (
+                request.user.role in ['admin', 'manager', 'team_lead', 'staff']
+                or request.user.is_superuser
+            )
         )
 
 
@@ -116,10 +122,12 @@ class CanReviewTask(permissions.BasePermission):
     """
     def has_permission(self, request, view):
         return (
-            request.user and
-            request.user.is_authenticated and
-            request.user.role in ['admin', 'manager', 'team_lead', 'staff'] or
-            request.user.is_superuser
+            request.user
+            and request.user.is_authenticated
+            and (
+                request.user.role in ['admin', 'manager', 'team_lead', 'staff']
+                or request.user.is_superuser
+            )
         )
 
 
@@ -143,10 +151,12 @@ class CanManageProjects(permissions.BasePermission):
     """
     def has_permission(self, request, view):
         return (
-            request.user and
-            request.user.is_authenticated and
-            request.user.role in ['admin', 'manager'] or
-            request.user.is_superuser
+            request.user
+            and request.user.is_authenticated
+            and (
+                request.user.role in ['admin', 'manager']
+                or request.user.is_superuser
+            )
         )
 
 

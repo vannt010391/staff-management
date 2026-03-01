@@ -74,7 +74,7 @@ export default function EvaluationForm({ evaluation = null, onClose, onSuccess }
       });
 
       toast.success(`Evaluation ${evaluation ? 'updated' : 'created'} successfully`);
-      onSuccess();
+      await onSuccess();
       onClose();
     } catch (error) {
       console.error('Error saving evaluation:', error);

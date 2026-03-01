@@ -1,17 +1,21 @@
 import { useState, useEffect } from 'react';
-import { Building2, Plus, Edit, Trash2, Users } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Building2, Plus, Edit, Trash2, Users, Eye } from 'lucide-react';
 import axios from 'axios';
 import { API_BASE_URL } from '../../constants';
 import { toast } from 'sonner';
 import DepartmentForm from '../../components/hr/DepartmentForm';
+import { PageHeader, StatCard, Button, EmptyState, Table, ViewToggle } from '../../components/ui';
 
 export default function DepartmentsPage() {
+  const navigate = useNavigate();
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [selectedDepartment, setSelectedDepartment] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [departmentToDelete, setDepartmentToDelete] = useState(null);
+  const [view, setView] = useState('list');
 
   useEffect(() => {
     fetchDepartments();
@@ -24,7 +28,8 @@ export default function DepartmentsPage() {
       const response = await axios.get(`${API_BASE_URL}/hr/departments/`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const data = Array.isArray(response.data) ? response.data : [];
+      // Handle both paginated response (with results) and direct array
+      const data = response.data.results || (Array.isArray(response.data) ? response.data : []);
       setDepartments(data);
     } catch (error) {
       console.error('Error fetching departments:', error);
@@ -38,6 +43,10 @@ export default function DepartmentsPage() {
   const handleEdit = (department) => {
     setSelectedDepartment(department);
     setShowForm(true);
+  };
+
+  const handleView = (department) => {
+    navigate(`/hr/departments/${department.id}`);
   };
 
   const handleDelete = async () => {
@@ -58,8 +67,8 @@ export default function DepartmentsPage() {
     }
   };
 
-  const handleFormSuccess = () => {
-    fetchDepartments();
+  const handleFormSuccess = async () => {
+    await fetchDepartments();
   };
 
   if (loading) {
@@ -71,48 +80,119 @@ export default function DepartmentsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-xl">
-              <Building2 className="h-8 w-8 text-white" />
-            </div>
-            Departments
-          </h1>
-          <p className="text-gray-600 mt-1">Manage organizational departments</p>
-        </div>
-        <button
-          onClick={() => {
-            setSelectedDepartment(null);
-            setShowForm(true);
-          }}
-          className="px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-xl hover:from-blue-700 hover:to-cyan-700 transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105"
-        >
-          <Plus className="h-5 w-5" />
-          New Department
-        </button>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
+      <div className="space-y-6">
+        {/* Header */}
+        <PageHeader
+          icon={Building2}
+          title="Departments"
+          subtitle="Manage organizational departments"
+          actions={
+            <>
+              <ViewToggle view={view} onViewChange={setView} />
+              <Button
+                variant="primary"
+                icon={Plus}
+                onClick={() => {
+                  setSelectedDepartment(null);
+                  setShowForm(true);
+                }}
+              >
+                New Department
+              </Button>
+            </>
+          }
+        />
 
-      {/* Stats Card */}
-      <div className="bg-gradient-to-br from-blue-500 to-cyan-600 rounded-2xl p-6 text-white shadow-lg">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-blue-100 text-sm">Total Departments</p>
-            <p className="text-4xl font-bold mt-1">{departments.length}</p>
-          </div>
-          <Building2 className="h-16 w-16 text-blue-200" />
+        {/* Stats Card */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <StatCard
+            icon={Building2}
+            label="Total Departments"
+            value={departments.length}
+            gradient="blue"
+          />
         </div>
-      </div>
 
-      {/* Departments Grid */}
-      {departments.length === 0 ? (
-        <div className="text-center py-12 bg-white/50 backdrop-blur-sm rounded-2xl border border-white/20">
-          <Building2 className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600 text-lg">No departments found</p>
-        </div>
-      ) : (
+        {/* Departments Display */}
+        {departments.length === 0 ? (
+          <EmptyState
+            icon={Building2}
+            title="No departments found"
+            description="Start by creating your first department"
+            action={
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setSelectedDepartment(null);
+                  setShowForm(true);
+                }}
+              >
+                New Department
+              </Button>
+            }
+          />
+        ) : view === 'list' ? (
+          <Table
+            columns={[
+              { key: 'name', label: 'Department Name', width: '25%' },
+              { key: 'description', label: 'Description', width: '30%' },
+              {
+                key: 'manager',
+                label: 'Manager',
+                width: '20%',
+                render: (dept) => dept.manager_details?.full_name || dept.manager_details?.username || '-'
+              },
+              {
+                key: 'employee_count',
+                label: 'Employees',
+                width: '15%',
+                render: (dept) => dept.employee_count || 0
+              },
+              {
+                key: 'actions',
+                label: 'Actions',
+                width: '10%',
+                render: (dept) => (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleView(dept);
+                      }}
+                      className="p-2 hover:bg-indigo-100 rounded-lg transition-colors"
+                      title="View"
+                    >
+                      <Eye className="h-4 w-4 text-indigo-600" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEdit(dept);
+                      }}
+                      className="p-2 hover:bg-blue-100 rounded-lg transition-colors"
+                      title="Edit"
+                    >
+                      <Edit className="h-4 w-4 text-blue-600" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDepartmentToDelete(dept);
+                        setShowDeleteConfirm(true);
+                      }}
+                      className="p-2 hover:bg-red-100 rounded-lg transition-colors"
+                      title="Delete"
+                    >
+                      <Trash2 className="h-4 w-4 text-red-600" />
+                    </button>
+                  </div>
+                )
+              }
+            ]}
+            data={departments}
+          />
+        ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {departments.map((department) => (
             <div
@@ -149,71 +229,79 @@ export default function DepartmentsPage() {
               </div>
 
               {/* Action Buttons */}
-              <div className="mt-4 pt-4 border-t border-gray-200 flex gap-2">
+              <div className="mt-4 pt-4 border-t border-gray-200 flex justify-end gap-2">
+                <button
+                  onClick={() => handleView(department)}
+                  className="p-2 hover:bg-indigo-100 rounded-lg transition-colors"
+                  title="View"
+                >
+                  <Eye className="h-4 w-4 text-indigo-600" />
+                </button>
                 <button
                   onClick={() => handleEdit(department)}
-                  className="flex-1 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium flex items-center justify-center gap-2"
+                  className="p-2 hover:bg-blue-100 rounded-lg transition-colors"
+                  title="Edit"
                 >
-                  <Edit className="h-4 w-4" />
-                  Edit
+                  <Edit className="h-4 w-4 text-blue-600" />
                 </button>
                 <button
                   onClick={() => {
                     setDepartmentToDelete(department);
                     setShowDeleteConfirm(true);
                   }}
-                  className="flex-1 px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium flex items-center justify-center gap-2"
+                  className="p-2 hover:bg-red-100 rounded-lg transition-colors"
+                  title="Delete"
                 >
-                  <Trash2 className="h-4 w-4" />
-                  Delete
+                  <Trash2 className="h-4 w-4 text-red-600" />
                 </button>
               </div>
             </div>
           ))}
-        </div>
-      )}
+          </div>
+        )}
 
-      {/* Department Form Modal */}
-      {showForm && (
-        <DepartmentForm
-          department={selectedDepartment}
-          onClose={() => {
-            setShowForm(false);
-            setSelectedDepartment(null);
-          }}
-          onSuccess={handleFormSuccess}
-        />
-      )}
+        {/* Department Form Modal */}
+        {showForm && (
+          <DepartmentForm
+            department={selectedDepartment}
+            onClose={() => {
+              setShowForm(false);
+              setSelectedDepartment(null);
+            }}
+            onSuccess={handleFormSuccess}
+          />
+        )}
 
-      {/* Delete Confirmation Modal */}
-      {showDeleteConfirm && departmentToDelete && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Confirm Delete</h3>
-            <p className="text-gray-600 mb-6">
-              Are you sure you want to delete the <span className="font-semibold">{departmentToDelete.name}</span> department?
-              This action cannot be undone.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={handleDelete}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
-              >
-                Delete
-              </button>
-              <button
-                onClick={() => {
-                  setShowDeleteConfirm(false);
-                  setDepartmentToDelete(null);
-                }}
-                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
-              >
-                Cancel
-              </button>
+        {/* Delete Confirmation Modal */}
+        {showDeleteConfirm && departmentToDelete && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
+              <h3 className="text-xl font-bold text-gray-900 mb-4">Confirm Delete</h3>
+              <p className="text-gray-600 mb-6">
+                Are you sure you want to delete the <span className="font-semibold">{departmentToDelete.name}</span> department?
+                This action cannot be undone.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={handleDelete}
+                  className="flex-1 px-6 py-3 bg-gradient-to-r from-red-600 to-pink-600 text-white rounded-xl hover:from-red-700 hover:to-pink-700 transition-all font-semibold shadow-lg hover:shadow-xl"
+                >
+                  Delete
+                </button>
+                <button
+                  onClick={() => {
+                    setShowDeleteConfirm(false);
+                    setDepartmentToDelete(null);
+                  }}
+                  className="flex-1 px-6 py-3 bg-white/80 backdrop-blur-sm text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all font-semibold shadow-md hover:shadow-lg"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

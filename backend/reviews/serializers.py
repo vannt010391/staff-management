@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import TaskReview, ReviewCriteria
 from projects.models import DesignRule
+from notifications.services import create_task_review_completed_notification
 
 
 class ReviewCriteriaSerializer(serializers.ModelSerializer):
@@ -92,6 +93,29 @@ class TaskReviewCreateSerializer(serializers.ModelSerializer):
 
         return value
 
+    def validate(self, attrs):
+        task = attrs.get('task')
+        request_user = self.context['request'].user
+        overall_status = attrs.get('overall_status')
+        criteria_data = attrs.get('criteria_data', [])
+
+        if task and task.reviewer_id and task.reviewer_id != request_user.id:
+            raise serializers.ValidationError('Only assigned reviewer can create review for this task.')
+
+        if task and not task.reviewer_id:
+            raise serializers.ValidationError('Reviewer must be assigned to task before reviewing.')
+
+        task_rule_ids = set(task.design_rules.values_list('id', flat=True)) if task else set()
+        for item in criteria_data:
+            if item.get('design_rule') not in task_rule_ids:
+                raise serializers.ValidationError('Criteria must reference design rules attached to task.')
+
+        if overall_status == 'rejected':
+            if not any(item.get('is_met') is False for item in criteria_data):
+                raise serializers.ValidationError('Rejected review must include at least one unmet criterion.')
+
+        return attrs
+
     def create(self, validated_data):
         """Create review with criteria"""
         criteria_data = validated_data.pop('criteria_data')
@@ -117,7 +141,11 @@ class TaskReviewCreateSerializer(serializers.ModelSerializer):
             task.status = 'rejected'
         task.save()
 
-        # TODO: Create notification for freelancer
+        create_task_review_completed_notification(
+            task=task,
+            reviewer=self.context['request'].user,
+            overall_status=review.get_overall_status_display(),
+        )
 
         return review
 
@@ -131,6 +159,10 @@ class TaskReviewUpdateSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         """Update review and task status"""
+        request_user = self.context['request'].user
+        if instance.task.reviewer_id and instance.task.reviewer_id != request_user.id:
+            raise serializers.ValidationError('Only assigned reviewer can update this review.')
+
         instance = super().update(instance, validated_data)
 
         # Update task status

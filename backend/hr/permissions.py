@@ -32,6 +32,9 @@ class IsAdminOrManagerOrSelf(permissions.BasePermission):
         elif hasattr(obj, 'user'):
             # For Employee model
             return obj.user == request.user
+        elif hasattr(obj, 'plan'):
+            # For Plan children (PlanGoal, PlanNote)
+            return obj.plan.user == request.user
 
         return False
 

@@ -5,13 +5,14 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
 from datetime import datetime
 
-from .models import Department, CareerPath, Employee, KPI, Evaluation, SalaryReview, PersonalReport
+from .models import Department, CareerPath, Employee, KPI, Evaluation, SalaryReview, PersonalReport, Plan, PlanGoal, PlanNote
 from .serializers import (
     DepartmentSerializer, CareerPathSerializer,
     EmployeeSerializer, EmployeeListSerializer,
     KPISerializer, EvaluationSerializer, EvaluationListSerializer,
     SalaryReviewSerializer, SalaryReviewListSerializer,
-    PersonalReportSerializer, PersonalReportListSerializer
+    PersonalReportSerializer, PersonalReportListSerializer,
+    PlanSerializer, PlanListSerializer, PlanGoalSerializer, PlanNoteSerializer
 )
 from .permissions import (
     IsAdminOrManager, IsAdminOrManagerOrSelf, CanManageHR,
@@ -407,3 +408,207 @@ class PersonalReportViewSet(viewsets.ModelViewSet):
                 {'error': 'Employee profile not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
+
+
+class PlanViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing plans (daily/weekly/monthly/yearly)
+
+    Permissions:
+    - Admin: see all plans
+    - Manager/Team Leader: see their own plans + plans of employees in departments they manage
+    - Staff/Freelancer: see only their own plans
+    """
+    queryset = Plan.objects.all()
+    permission_classes = [IsAdminOrManagerOrSelf]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['user', 'plan_type', 'status', 'period_start']
+    search_fields = ['title', 'description', 'user__username']
+    ordering_fields = ['period_start', 'created_at', 'completion_percentage']
+    ordering = ['-period_start']
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return PlanListSerializer
+        return PlanSerializer
+
+    def get_queryset(self):
+        """
+        Filter based on user role:
+        - Admin: see all plans
+        - Manager/Team Leader: see their own plans + their staff's plans (employees in departments they manage)
+        - Others: see only their own plans
+        """
+        user = self.request.user
+
+        # Admin sees all plans
+        if user.role == 'admin' or user.is_superuser:
+            return Plan.objects.all()
+
+        # Manager/Team Leader sees their own plans + their staff's plans
+        if user.role in ['manager', 'team_lead']:
+            # Get departments managed by this user
+            managed_departments = user.managed_departments.all()
+
+            if managed_departments.exists():
+                from hr.models import Employee
+                # Get all employees in managed departments
+                staff_users = Employee.objects.filter(
+                    department__in=managed_departments,
+                    is_active=True
+                ).values_list('user_id', flat=True)
+
+                # Return plans for self + staff
+                return Plan.objects.filter(user__in=list(staff_users) + [user.id])
+            else:
+                # Manager/Team Leader with no departments: see only own plans
+                return Plan.objects.filter(user=user)
+
+        # All other users see only their own plans
+        return Plan.objects.filter(user=user)
+
+    def perform_create(self, serializer):
+        """Auto-set user based on logged-in user"""
+        serializer.save(user=self.request.user)
+
+    @action(detail=True, methods=['post'])
+    def add_goal(self, request, pk=None):
+        """Add a goal to this plan"""
+        plan = self.get_object()
+        serializer = PlanGoalSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(plan=plan)
+            plan.auto_calculate_completion()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'])
+    def add_note(self, request, pk=None):
+        """Add a reflective note to this plan"""
+        plan = self.get_object()
+        serializer = PlanNoteSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(plan=plan, created_by=request.user)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'])
+    def review(self, request, pk=None):
+        """Manager adds review feedback"""
+        plan = self.get_object()
+
+        # Check if user is admin or manager
+        if request.user.role not in ['admin', 'manager']:
+            return Response(
+                {'error': 'Only managers can review plans'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        feedback = request.data.get('manager_feedback', '')
+        plan.manager_feedback = feedback
+        plan.reviewed_by = request.user
+        plan.reviewed_at = timezone.now()
+        plan.save()
+
+        return Response(PlanSerializer(plan).data)
+
+    @action(detail=False, methods=['get'])
+    def my_plans(self, request):
+        """
+        Get plans based on user role:
+        - Admin: all plans
+        - Manager/Team Leader: own plans + staff plans (employees in managed departments)
+        - Others: only own plans
+        """
+        user = request.user
+
+        # Use the same logic as get_queryset
+        if user.role == 'admin' or user.is_superuser:
+            plans = Plan.objects.all()
+        elif user.role in ['manager', 'team_lead']:
+            managed_departments = user.managed_departments.all()
+            if managed_departments.exists():
+                from hr.models import Employee
+                staff_users = Employee.objects.filter(
+                    department__in=managed_departments,
+                    is_active=True
+                ).values_list('user_id', flat=True)
+                plans = Plan.objects.filter(user__in=list(staff_users) + [user.id])
+            else:
+                plans = Plan.objects.filter(user=user)
+        else:
+            plans = Plan.objects.filter(user=user)
+
+        # Optional filter by plan_type
+        plan_type = request.query_params.get('plan_type')
+        if plan_type:
+            plans = plans.filter(plan_type=plan_type)
+
+        serializer = PlanListSerializer(plans, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def active_plans(self, request):
+        """Get plans in active status"""
+        plans = self.get_queryset().filter(status='active')
+        serializer = PlanListSerializer(plans, many=True)
+        return Response(serializer.data)
+
+
+class PlanGoalViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing plan goals
+    """
+    queryset = PlanGoal.objects.all()
+    serializer_class = PlanGoalSerializer
+    permission_classes = [IsAdminOrManagerOrSelf]
+
+    def get_queryset(self):
+        """Filter goals based on accessible plans"""
+        user = self.request.user
+
+        if user.role == 'admin' or user.is_superuser:
+            return PlanGoal.objects.all()
+
+        # All users can access goals from their own plans
+        return PlanGoal.objects.filter(plan__user=user)
+
+    @action(detail=True, methods=['post'])
+    def toggle_complete(self, request, pk=None):
+        """Toggle goal completion status"""
+        goal = self.get_object()
+
+        if goal.is_completed:
+            goal.is_completed = False
+            goal.completed_at = None
+        else:
+            goal.mark_completed()
+
+        goal.save()
+        return Response(PlanGoalSerializer(goal).data)
+
+
+class PlanNoteViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing plan notes
+    """
+    queryset = PlanNote.objects.all()
+    serializer_class = PlanNoteSerializer
+    permission_classes = [IsAdminOrManagerOrSelf]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['plan', 'created_by']
+    ordering_fields = ['created_at']
+    ordering = ['-created_at']
+
+    def get_queryset(self):
+        """Filter notes based on accessible plans"""
+        user = self.request.user
+
+        if user.role == 'admin' or user.is_superuser:
+            return PlanNote.objects.all()
+
+        # All users can access notes from their own plans
+        return PlanNote.objects.filter(plan__user=user)
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)

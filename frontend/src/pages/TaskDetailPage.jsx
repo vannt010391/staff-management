@@ -1,0 +1,604 @@
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, Target, User, Calendar, DollarSign, Clock, Flag } from 'lucide-react';
+import { toast } from 'sonner';
+import tasksService from '../services/tasks';
+import usersService from '../services/users';
+import { formatCurrency, getTaskAssigneeName } from '../utils/helpers';
+import { useAuthStore } from '../stores/authStore';
+import { TASK_STATUS_LABELS } from '../constants';
+
+export default function TaskDetailPage() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const { user } = useAuthStore();
+  const [task, setTask] = useState(null);
+  const [reviewers, setReviewers] = useState([]);
+  const [selectedReviewerId, setSelectedReviewerId] = useState('');
+  const [reviewComment, setReviewComment] = useState('');
+  const [failedCriteria, setFailedCriteria] = useState({});
+  const [commentText, setCommentText] = useState('');
+  const [commentDesignRule, setCommentDesignRule] = useState('');
+  const [commentResult, setCommentResult] = useState('none');
+  const [commentAttachment, setCommentAttachment] = useState(null);
+  const [commentLoading, setCommentLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
+
+  const canAssignReviewer = ['admin', 'manager'].includes(user?.role);
+  const isReviewerRole = ['admin', 'manager', 'team_lead', 'staff'].includes(user?.role);
+
+  useEffect(() => {
+    fetchTask();
+  }, [id]);
+
+  useEffect(() => {
+    if (canAssignReviewer) {
+      fetchReviewers();
+    }
+  }, [canAssignReviewer]);
+
+  const fetchTask = async () => {
+    try {
+      setLoading(true);
+      const data = await tasksService.getTask(id);
+      setTask(data);
+      setSelectedReviewerId(data.reviewer ? String(data.reviewer) : '');
+      setFailedCriteria({});
+      setReviewComment('');
+    } catch (error) {
+      console.error('Error fetching task detail:', error);
+      toast.error('Failed to load task detail');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmitComment = async (e) => {
+    e.preventDefault();
+
+    if (!commentText.trim() && !commentAttachment) {
+      toast.error('Please enter comment text or attach a file/image');
+      return;
+    }
+
+    try {
+      setCommentLoading(true);
+      const payload = {
+        comment: commentText.trim(),
+        design_rule: commentDesignRule ? Number(commentDesignRule) : undefined,
+        is_passed: commentResult === 'none' ? undefined : commentResult === 'pass',
+        attachment: commentAttachment || undefined,
+      };
+
+      await tasksService.addComment(id, payload);
+      toast.success('Comment added successfully');
+      setCommentText('');
+      setCommentDesignRule('');
+      setCommentResult('none');
+      setCommentAttachment(null);
+      await fetchTask();
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Failed to add comment');
+    } finally {
+      setCommentLoading(false);
+    }
+  };
+
+  const fetchReviewers = async () => {
+    try {
+      const [admins, managers, teamLeads, staffs] = await Promise.all([
+        usersService.getUsersByRole('admin'),
+        usersService.getUsersByRole('manager'),
+        usersService.getUsersByRole('team_lead'),
+        usersService.getUsersByRole('staff'),
+      ]);
+
+      const reviewerMap = new Map();
+      [...admins, ...managers, ...teamLeads, ...staffs].forEach((item) => {
+        reviewerMap.set(item.id, item);
+      });
+
+      setReviewers(Array.from(reviewerMap.values()));
+    } catch (error) {
+      console.error('Error fetching reviewers:', error);
+    }
+  };
+
+  const handleAssignReviewer = async () => {
+    try {
+      setActionLoading(true);
+      const reviewerId = selectedReviewerId ? Number(selectedReviewerId) : null;
+      await tasksService.assignReviewer(id, reviewerId);
+      toast.success(reviewerId ? 'Reviewer assigned successfully' : 'Reviewer cleared successfully');
+      await fetchTask();
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Failed to assign reviewer');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleSubmitForReview = async () => {
+    try {
+      setActionLoading(true);
+      await tasksService.changeStatus(id, 'review_pending');
+      toast.success('Task submitted for review');
+      await fetchTask();
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Failed to submit for review');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleStartWorking = async () => {
+    try {
+      setActionLoading(true);
+      await tasksService.changeStatus(id, 'working');
+      toast.success('Task moved to Working');
+      await fetchTask();
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Failed to update task status');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleReviewDecision = async (decision) => {
+    const designRules = Array.isArray(task.design_rules) ? task.design_rules : [];
+
+    let criteriaData = [];
+
+    if (decision === 'reject') {
+      if (designRules.length === 0) {
+        toast.error('Cannot reject without design rules criteria on task');
+        return;
+      }
+
+      const failedRuleIds = designRules
+        .filter((rule) => failedCriteria[rule.id])
+        .map((rule) => rule.id);
+
+      if (failedRuleIds.length === 0) {
+        toast.error('Please select at least one failed criterion for reject');
+        return;
+      }
+
+      criteriaData = designRules.map((rule) => ({
+        design_rule: rule.id,
+        is_met: !failedRuleIds.includes(rule.id),
+        comment: failedRuleIds.includes(rule.id) ? reviewComment : '',
+      }));
+    } else {
+      criteriaData = designRules.map((rule) => ({
+        design_rule: rule.id,
+        is_met: true,
+        comment: '',
+      }));
+    }
+
+    try {
+      setActionLoading(true);
+      if (decision === 'approve') {
+        await tasksService.approveTask(id, { comment: reviewComment, criteria_data: criteriaData });
+        toast.success('Task approved successfully');
+      } else {
+        await tasksService.rejectTask(id, { comment: reviewComment, criteria_data: criteriaData });
+        toast.success('Task rejected successfully');
+      }
+      await fetchTask();
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Failed to submit review decision');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600" /></div>;
+  }
+
+  if (!task) {
+    return <div className="p-6 text-gray-600">Task not found.</div>;
+  }
+
+  const isAssignedFreelancer = user?.role === 'freelancer' && task.assigned_to === user?.id;
+  const isAssignedReviewer = task.reviewer === user?.id;
+  const canSubmitForReview = isAssignedFreelancer && task.status === 'working';
+  const canRestartWork = isAssignedFreelancer && ['assigned', 'rejected'].includes(task.status);
+  const canReview = isReviewerRole && isAssignedReviewer && task.status === 'review_pending';
+  const designRules = Array.isArray(task.design_rules) ? task.design_rules : [];
+  const comments = Array.isArray(task.comments) ? task.comments : [];
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
+      <div className="space-y-6">
+        <button onClick={() => navigate('/tasks')} className="inline-flex items-center gap-2 text-indigo-600 hover:text-indigo-700 font-medium">
+          <ArrowLeft className="h-4 w-4" /> Back to Tasks
+        </button>
+
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg">
+          <h1 className="text-3xl font-bold text-gray-900">{task.title}</h1>
+          <p className="text-gray-600 mt-2 whitespace-pre-line">{task.description || 'No description'}</p>
+        </div>
+
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg grid grid-cols-1 md:grid-cols-2 gap-5">
+          <Info icon={Target} label="Project" value={task.project_name || '-'} />
+          <Info icon={Clock} label="Status" value={task.status_display || task.status || '-'} />
+          <Info icon={Flag} label="Priority" value={task.priority_display || task.priority || '-'} />
+          <Info icon={User} label="Assigned To" value={getTaskAssigneeName(task) || 'Unassigned'} />
+          <Info icon={User} label="Assigned By" value={task.assigned_by_username || '-'} />
+          <Info icon={User} label="Reviewer" value={task.reviewer_full_name || task.reviewer_username || '-'} />
+          <Info icon={DollarSign} label="Price" value={task.price ? formatCurrency(Number(task.price)) : '-'} />
+          <Info icon={Calendar} label="Due Date" value={task.due_date ? new Date(task.due_date).toLocaleDateString() : '-'} />
+          <Info icon={Calendar} label="Created" value={task.created_at ? new Date(task.created_at).toLocaleString() : '-'} />
+          <Info icon={DollarSign} label="Freelancer Earning" value={formatCurrency(Number(task.freelancer_earning || 0))} />
+        </div>
+
+        {canAssignReviewer && (
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg">
+            <h3 className="text-lg font-bold text-gray-900 mb-4">Review Assignment</h3>
+            <div className="flex flex-wrap items-center gap-3">
+              <select
+                value={selectedReviewerId}
+                onChange={(e) => setSelectedReviewerId(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg min-w-[280px]"
+              >
+                <option value="">Unassigned</option>
+                {reviewers.map((reviewer) => (
+                  <option key={reviewer.id} value={reviewer.id}>
+                    {(reviewer.first_name || reviewer.last_name)
+                      ? `${reviewer.first_name || ''} ${reviewer.last_name || ''}`.trim()
+                      : reviewer.username}{' '}
+                    ({reviewer.role})
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={handleAssignReviewer}
+                disabled={actionLoading}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+              >
+                Save Reviewer
+              </button>
+            </div>
+          </div>
+        )}
+
+        {(canSubmitForReview || canRestartWork || canReview) && (
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg">
+            <h3 className="text-lg font-bold text-gray-900 mb-2">Task Lifecycle Actions</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Current status: {TASK_STATUS_LABELS[task.status] || task.status}
+            </p>
+
+            {task.status === 'review_pending' && isReviewerRole && !isAssignedReviewer && (
+              <p className="text-sm text-amber-700 mb-4 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                This task is in review pending. Only assigned reviewer can approve or reject.
+              </p>
+            )}
+
+            {canReview && (
+              <div className="mb-4 space-y-3">
+                <label className="block text-sm font-medium text-gray-700">Review Comment</label>
+                <textarea
+                  rows={3}
+                  value={reviewComment}
+                  onChange={(e) => setReviewComment(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  placeholder="Write review note..."
+                />
+
+                {designRules.length > 0 && (
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 mb-2">Reject Criteria (select failed rules)</p>
+                    <div className="space-y-2">
+                      {designRules.map((rule) => (
+                        <label key={rule.id} className="flex items-start gap-2 text-sm text-gray-700">
+                          <input
+                            type="checkbox"
+                            checked={!!failedCriteria[rule.id]}
+                            onChange={(e) => setFailedCriteria((prev) => ({ ...prev, [rule.id]: e.target.checked }))}
+                            className="mt-0.5 h-4 w-4"
+                          />
+                          <span>
+                            {rule.name} {rule.is_required ? '(Required)' : '(Optional)'}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-3">
+              {canRestartWork && (
+                <button
+                  onClick={handleStartWorking}
+                  disabled={actionLoading}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                >
+                  Start Working
+                </button>
+              )}
+              {canSubmitForReview && (
+                <button
+                  onClick={handleSubmitForReview}
+                  disabled={actionLoading}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
+                >
+                  Submit For Review
+                </button>
+              )}
+              {canReview && (
+                <>
+                  <button
+                    onClick={() => handleReviewDecision('approve')}
+                    disabled={actionLoading}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+                  >
+                    Approve
+                  </button>
+                  <button
+                    onClick={() => handleReviewDecision('reject')}
+                    disabled={actionLoading}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+                  >
+                    Reject
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg space-y-6">
+          <div>
+            <h3 className="text-lg font-bold text-gray-900">Review Comments</h3>
+            <p className="text-sm text-gray-600 mt-1">Add review criteria result (pass/failed) and attach file or image</p>
+          </div>
+
+          <form onSubmit={handleSubmitComment} className="space-y-4">
+            <textarea
+              rows={4}
+              value={commentText}
+              onChange={(e) => setCommentText(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+              placeholder="Write your comment or review note..."
+            />
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <select
+                value={commentDesignRule}
+                onChange={(e) => setCommentDesignRule(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg"
+              >
+                <option value="">No criteria</option>
+                {designRules.map((rule) => (
+                  <option key={rule.id} value={rule.id}>
+                    {rule.name}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={commentResult}
+                onChange={(e) => setCommentResult(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg"
+              >
+                <option value="none">No pass/fail</option>
+                <option value="pass">Pass</option>
+                <option value="failed">Failed</option>
+              </select>
+
+              <input
+                type="file"
+                onChange={(e) => setCommentAttachment(e.target.files?.[0] || null)}
+                className="px-3 py-2 border border-gray-300 rounded-lg"
+                accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.rar,.txt"
+              />
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                disabled={commentLoading}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {commentLoading ? 'Submitting...' : 'Add Comment'}
+              </button>
+            </div>
+          </form>
+
+          <div className="space-y-3">
+            {comments.length === 0 ? (
+              <p className="text-sm text-gray-500">No comments yet.</p>
+            ) : (
+              comments.map((comment) => (
+                  <CommentItem
+                    key={comment.id}
+                    comment={comment}
+                    taskId={id}
+                    designRules={designRules}
+                    onCommentAdded={fetchTask}
+                  />
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Info({ icon: Icon, label, value }) {
+  return (
+    <div className="flex items-center gap-3">
+      <Icon className="h-5 w-5 text-gray-400" />
+      <div>
+        <p className="text-sm text-gray-600">{label}</p>
+        <p className="font-medium text-gray-900">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function CommentItem({ comment, taskId, designRules, onCommentAdded }) {
+  const [showReplyForm, setShowReplyForm] = useState(false);
+  const [replyText, setReplyText] = useState('');
+  const [replyDesignRule, setReplyDesignRule] = useState('');
+  const [replyResult, setReplyResult] = useState('none');
+  const [replyAttachment, setReplyAttachment] = useState(null);
+  const [replyLoading, setReplyLoading] = useState(false);
+
+  const replies = Array.isArray(comment.replies) ? comment.replies : [];
+  const passFailBadge =
+    comment.pass_fail_display === 'pass'
+      ? 'bg-green-100 text-green-700'
+      : comment.pass_fail_display === 'failed'
+        ? 'bg-red-100 text-red-700'
+        : 'bg-gray-100 text-gray-700';
+
+  const handleReplySubmit = async (e) => {
+    e.preventDefault();
+
+    if (!replyText.trim() && !replyAttachment) {
+      toast.error('Please enter reply text or attach a file/image');
+      return;
+    }
+
+    try {
+      setReplyLoading(true);
+      await tasksService.addComment(taskId, {
+        parent: comment.id,
+        comment: replyText.trim(),
+        design_rule: replyDesignRule ? Number(replyDesignRule) : undefined,
+        is_passed: replyResult === 'none' ? undefined : replyResult === 'pass',
+        attachment: replyAttachment || undefined,
+      });
+
+      setReplyText('');
+      setReplyDesignRule('');
+      setReplyResult('none');
+      setReplyAttachment(null);
+      setShowReplyForm(false);
+      await onCommentAdded();
+      toast.success('Reply added successfully');
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Failed to add reply');
+    } finally {
+      setReplyLoading(false);
+    }
+  };
+
+  return (
+    <div className="border border-gray-200 rounded-lg p-4 bg-white">
+      <div className="flex flex-wrap items-center gap-2 mb-2">
+        <span className="text-sm font-semibold text-gray-900">{comment.user_full_name || comment.user_username || 'Unknown'}</span>
+        {comment.design_rule_name && (
+          <span className="text-xs px-2 py-1 rounded-full bg-indigo-100 text-indigo-700">
+            {comment.design_rule_name}
+          </span>
+        )}
+        {comment.pass_fail_display && (
+          <span className={`text-xs px-2 py-1 rounded-full ${passFailBadge}`}>
+            {comment.pass_fail_display.toUpperCase()}
+          </span>
+        )}
+        <span className="text-xs text-gray-500">{comment.created_at ? new Date(comment.created_at).toLocaleString() : ''}</span>
+      </div>
+
+      {comment.comment && <p className="text-sm text-gray-700 whitespace-pre-line">{comment.comment}</p>}
+
+      {comment.attachment_url && (
+        <a
+          href={comment.attachment_url}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex mt-2 text-sm text-blue-600 hover:text-blue-700 underline"
+        >
+          Open attachment
+        </a>
+      )}
+
+      <div className="mt-3">
+        <button
+          onClick={() => setShowReplyForm((prev) => !prev)}
+          className="text-xs text-indigo-600 hover:text-indigo-700 font-medium"
+        >
+          {showReplyForm ? 'Cancel reply' : 'Reply'}
+        </button>
+      </div>
+
+      {showReplyForm && (
+        <form onSubmit={handleReplySubmit} className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg space-y-3">
+          <textarea
+            rows={3}
+            value={replyText}
+            onChange={(e) => setReplyText(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+            placeholder="Write a reply..."
+          />
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <select
+              value={replyDesignRule}
+              onChange={(e) => setReplyDesignRule(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+            >
+              <option value="">No criteria</option>
+              {designRules.map((rule) => (
+                <option key={rule.id} value={rule.id}>
+                  {rule.name}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={replyResult}
+              onChange={(e) => setReplyResult(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+            >
+              <option value="none">No pass/fail</option>
+              <option value="pass">Pass</option>
+              <option value="failed">Failed</option>
+            </select>
+
+            <input
+              type="file"
+              onChange={(e) => setReplyAttachment(e.target.files?.[0] || null)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+              accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.rar,.txt"
+            />
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={replyLoading}
+              className="px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700 disabled:opacity-50"
+            >
+              {replyLoading ? 'Sending...' : 'Send Reply'}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {replies.length > 0 && (
+        <div className="mt-3 pl-4 border-l-2 border-gray-100 space-y-2">
+          {replies.map((reply) => (
+            <CommentItem
+              key={reply.id}
+              comment={reply}
+              taskId={taskId}
+              designRules={designRules}
+              onCommentAdded={onCommentAdded}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

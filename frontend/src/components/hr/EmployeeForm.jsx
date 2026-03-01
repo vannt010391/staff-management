@@ -101,7 +101,7 @@ export default function EmployeeForm({ employee = null, onClose, onSuccess }) {
       });
 
       toast.success(`Employee ${employee ? 'updated' : 'created'} successfully`);
-      onSuccess();
+      await onSuccess();
       onClose();
     } catch (error) {
       console.error('Error saving employee:', error);

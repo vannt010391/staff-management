@@ -1,71 +1,139 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import {
   ListTodo,
   Plus,
   Search,
-  Filter,
   Clock,
   CheckCircle,
-  AlertCircle,
   PlayCircle,
   Calendar,
   DollarSign,
   User,
-  Sparkles,
-  TrendingUp,
   Target,
+  Edit,
+  Trash2,
+  Loader2,
+  Eye,
 } from 'lucide-react';
+import { toast } from 'sonner';
+import tasksService from '../services/tasks';
+import TaskForm from '../components/tasks/TaskForm';
+import { TASK_STATUS, TASK_PRIORITY, TASK_STATUS_LABELS, TASK_PRIORITY_LABELS } from '../constants';
+import { Table, ViewToggle } from '../components/ui';
+import { formatCurrency, getTaskAssigneeName } from '../utils/helpers';
+
+const getReviewerName = (task) => task.reviewer_full_name || task.reviewer_username || 'Unassigned';
 
 export default function TasksPage() {
+  const navigate = useNavigate();
   const { user } = useAuthStore();
+  const [tasks, setTasks] = useState([]);
+  const [earningsSummary, setEarningsSummary] = useState(null);
+  const [earningsLoading, setEarningsLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterPriority, setFilterPriority] = useState('all');
+  const [filterReviewer, setFilterReviewer] = useState('all');
+  const [showForm, setShowForm] = useState(false);
+  const [selectedTask, setSelectedTask] = useState(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [taskToDelete, setTaskToDelete] = useState(null);
+  const [view, setView] = useState('list');
 
-  // Mock data
-  const tasks = [
-    {
-      id: 1,
-      title: 'Design PowerPoint Template - Module 1',
-      description: 'Create modern PPT template for e-learning module 1',
-      status: 'working',
-      priority: 'high',
-      project: 'E-Learning Platform',
-      assigned_to: 'John Doe',
-      due_date: '2024-03-15',
-      price: 250.00,
-    },
-    {
-      id: 2,
-      title: 'Storyline Interactive Quiz',
-      description: 'Build interactive quiz with 20 questions',
-      status: 'review_pending',
-      priority: 'urgent',
-      project: 'Corporate Training',
-      assigned_to: 'Jane Smith',
-      due_date: '2024-03-10',
-      price: 350.00,
-    },
-    {
-      id: 3,
-      title: 'Slide Animations & Transitions',
-      description: 'Add smooth animations to existing slides',
-      status: 'assigned',
-      priority: 'medium',
-      project: 'E-Learning Platform',
-      assigned_to: 'John Doe',
-      due_date: '2024-03-20',
-      price: 150.00,
-    },
-  ];
+  useEffect(() => {
+    fetchTasks();
+  }, [filterStatus, filterPriority]);
 
-  const stats = [
-    { label: 'Total Tasks', value: '15', icon: ListTodo, color: 'from-blue-500 to-cyan-500', iconBg: 'bg-blue-100', iconColor: 'text-blue-600' },
-    { label: 'In Progress', value: '8', icon: PlayCircle, color: 'from-orange-500 to-red-500', iconBg: 'bg-orange-100', iconColor: 'text-orange-600' },
-    { label: 'Review Pending', value: '3', icon: Clock, color: 'from-purple-500 to-pink-500', iconBg: 'bg-purple-100', iconColor: 'text-purple-600' },
-    { label: 'Completed', value: '4', icon: CheckCircle, color: 'from-green-500 to-emerald-500', iconBg: 'bg-green-100', iconColor: 'text-green-600' },
-  ];
+  useEffect(() => {
+    if (user?.role === 'freelancer') {
+      fetchEarningsSummary();
+    }
+  }, [user?.role]);
+
+  const fetchTasks = async () => {
+    try {
+      setLoading(true);
+      const params = {};
+      if (filterStatus !== 'all') params.status = filterStatus;
+      if (filterPriority !== 'all') params.priority = filterPriority;
+
+      const data = await tasksService.getTasks(params);
+      setTasks(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Error fetching tasks:', error);
+      toast.error('Failed to load tasks');
+      setTasks([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchEarningsSummary = async () => {
+    try {
+      setEarningsLoading(true);
+      const data = await tasksService.getEarningsSummary();
+      setEarningsSummary(data);
+    } catch (error) {
+      console.error('Error fetching earnings summary:', error);
+      setEarningsSummary(null);
+    } finally {
+      setEarningsLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!taskToDelete) return;
+
+    try {
+      await tasksService.deleteTask(taskToDelete.id);
+      toast.success('Task deleted successfully');
+      setShowDeleteConfirm(false);
+      setTaskToDelete(null);
+      fetchTasks();
+    } catch (error) {
+      console.error('Error deleting task:', error);
+      toast.error('Failed to delete task');
+    }
+  };
+
+  const handleFormSuccess = async () => {
+    await fetchTasks();
+  };
+
+  const filteredTasks = tasks.filter((task) => {
+    const searchLower = searchQuery.toLowerCase();
+    const matchesSearch =
+      task.title?.toLowerCase().includes(searchLower) ||
+      task.description?.toLowerCase().includes(searchLower) ||
+      task.project_name?.toLowerCase().includes(searchLower);
+    const reviewerName = getReviewerName(task);
+    const matchesReviewer = filterReviewer === 'all' || reviewerName === filterReviewer;
+    return matchesSearch && matchesReviewer;
+  });
+
+  const reviewerOptions = Array.from(new Set(tasks.map((task) => getReviewerName(task)))).sort((a, b) =>
+    a.localeCompare(b)
+  );
+
+  const stats = {
+    total: tasks.length,
+    in_progress: tasks.filter(t => t.status === 'working').length,
+    review_pending: tasks.filter(t => t.status === 'review_pending').length,
+    completed: tasks.filter(t => t.status === 'completed').length,
+  };
+
+  const canCreateTask = user?.role === 'admin' || user?.role === 'manager' || user?.role === 'team_lead';
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-96">
+        <Loader2 className="h-12 w-12 text-blue-600 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50 p-6 space-y-6">
@@ -77,57 +145,108 @@ export default function TasksPage() {
       </div>
 
       {/* Header with Glass Morphism */}
-      <div className="relative overflow-hidden bg-white/40 backdrop-blur-2xl rounded-3xl shadow-2xl border border-white/50 p-8">
+      <div className="relative overflow-hidden bg-white/40 backdrop-blur-2xl rounded-2xl shadow-lg border border-white/50 p-6">
         <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 via-purple-600/10 to-pink-600/10" />
         <div className="relative z-10 flex items-center justify-between">
           <div className="space-y-2">
             <div className="flex items-center gap-3">
-              <div className="p-3 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl shadow-xl transform hover:scale-110 transition-transform duration-300">
-                <ListTodo className="h-8 w-8 text-white" />
+              <div className="p-2 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg shadow-lg">
+                <ListTodo className="h-5 w-5 text-white" />
               </div>
-              <h1 className="text-5xl font-black bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+              <h1 className="text-2xl font-black bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
                 {user?.role === 'freelancer' ? 'My Tasks' : 'All Tasks'}
               </h1>
             </div>
-            <p className="text-gray-600 text-lg ml-16">
+            <p className="text-gray-600 text-sm ml-10">
               Track and manage your design tasks
             </p>
           </div>
-          {(user?.role === 'admin' || user?.role === 'manager') && (
-            <button className="group relative overflow-hidden bg-gradient-to-r from-blue-600 to-purple-600 text-white px-8 py-4 rounded-2xl font-bold shadow-2xl hover:shadow-purple-500/50 transition-all duration-300 hover:scale-105">
-              <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-pink-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-              <div className="relative flex items-center gap-2">
-                <Plus className="h-6 w-6" />
-                Create Task
-              </div>
-            </button>
-          )}
+          <div className="flex items-center gap-3">
+            <ViewToggle view={view} onViewChange={setView} />
+            {canCreateTask && (
+              <button
+                onClick={() => {
+                  setSelectedTask(null);
+                  setShowForm(true);
+                }}
+                className="group relative overflow-hidden bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-xl font-semibold shadow-lg hover:shadow-purple-500/50 transition-all duration-300 hover:scale-105"
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-pink-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                <div className="relative flex items-center gap-2">
+                  <Plus className="h-5 w-5" />
+                  Create Task
+                </div>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Stats Grid with Floating Animation */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat, index) => (
-          <div
-            key={stat.label}
-            className="group relative bg-white/60 backdrop-blur-xl rounded-2xl shadow-xl border border-white/50 p-6 hover:shadow-2xl transition-all duration-500 hover:-translate-y-2"
-            style={{ animationDelay: `${index * 100}ms` }}
-          >
-            <div className="flex items-center justify-between">
-              <div className="space-y-2">
-                <p className="text-sm font-semibold text-gray-600">{stat.label}</p>
-                <p className={`text-5xl font-black bg-gradient-to-r ${stat.color} bg-clip-text text-transparent`}>
-                  {stat.value}
+        <StatCard
+          icon={ListTodo}
+          label="Total Tasks"
+          value={stats.total.toString()}
+          color="from-blue-500 to-cyan-500"
+          iconBg="bg-blue-100"
+          iconColor="text-blue-600"
+        />
+        <StatCard
+          icon={PlayCircle}
+          label="In Progress"
+          value={stats.in_progress.toString()}
+          color="from-orange-500 to-red-500"
+          iconBg="bg-orange-100"
+          iconColor="text-orange-600"
+        />
+        <StatCard
+          icon={Clock}
+          label="Review Pending"
+          value={stats.review_pending.toString()}
+          color="from-purple-500 to-pink-500"
+          iconBg="bg-purple-100"
+          iconColor="text-purple-600"
+        />
+        <StatCard
+          icon={CheckCircle}
+          label="Completed"
+          value={stats.completed.toString()}
+          color="from-green-500 to-emerald-500"
+          iconBg="bg-green-100"
+          iconColor="text-green-600"
+        />
+      </div>
+
+      {user?.role === 'freelancer' && (
+        <div className="bg-white/60 backdrop-blur-xl rounded-2xl shadow-xl border border-white/50 p-6">
+          <h2 className="text-xl font-bold text-gray-900 mb-4">Earnings Summary</h2>
+          {earningsLoading ? (
+            <p className="text-gray-600">Loading earnings summary...</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-white rounded-xl border border-gray-200 p-4">
+                <p className="text-sm text-gray-600 mb-1">Total Earned</p>
+                <p className="text-2xl font-bold text-emerald-600">
+                  {formatCurrency(Number(earningsSummary?.total_earned || 0))}
                 </p>
               </div>
-              <div className={`${stat.iconBg} ${stat.iconColor} p-4 rounded-2xl shadow-lg group-hover:scale-110 group-hover:rotate-12 transition-all duration-500`}>
-                <stat.icon className="h-7 w-7" />
+              <div className="bg-white rounded-xl border border-gray-200 p-4">
+                <p className="text-sm text-gray-600 mb-1">Approved/Completed Tasks</p>
+                <p className="text-2xl font-bold text-blue-600">
+                  {earningsSummary?.approved_or_completed_tasks || 0}
+                </p>
+              </div>
+              <div className="bg-white rounded-xl border border-gray-200 p-4">
+                <p className="text-sm text-gray-600 mb-1">Pending Review Amount</p>
+                <p className="text-2xl font-bold text-purple-600">
+                  {formatCurrency(Number(earningsSummary?.pending_review_amount || 0))}
+                </p>
               </div>
             </div>
-            <div className={`absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r ${stat.color} rounded-b-2xl`} />
-          </div>
-        ))}
-      </div>
+          )}
+        </div>
+      )}
 
       {/* Filters with Glass Effect */}
       <div className="bg-white/60 backdrop-blur-xl rounded-2xl shadow-xl border border-white/50 p-6">
@@ -148,12 +267,12 @@ export default function TasksPage() {
             className="px-6 py-4 bg-white/80 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium cursor-pointer"
           >
             <option value="all">All Status</option>
-            <option value="new">New</option>
-            <option value="assigned">Assigned</option>
-            <option value="working">Working</option>
-            <option value="review_pending">Review Pending</option>
-            <option value="approved">Approved</option>
-            <option value="completed">Completed</option>
+            <option value={TASK_STATUS.NEW}>New</option>
+            <option value={TASK_STATUS.ASSIGNED}>Assigned</option>
+            <option value={TASK_STATUS.WORKING}>Working</option>
+            <option value={TASK_STATUS.REVIEW_PENDING}>Review Pending</option>
+            <option value={TASK_STATUS.APPROVED}>Approved</option>
+            <option value={TASK_STATUS.COMPLETED}>Completed</option>
           </select>
           <select
             value={filterPriority}
@@ -161,25 +280,259 @@ export default function TasksPage() {
             className="px-6 py-4 bg-white/80 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium cursor-pointer"
           >
             <option value="all">All Priority</option>
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-            <option value="urgent">Urgent</option>
+            <option value={TASK_PRIORITY.LOW}>Low</option>
+            <option value={TASK_PRIORITY.MEDIUM}>Medium</option>
+            <option value={TASK_PRIORITY.HIGH}>High</option>
+            <option value={TASK_PRIORITY.URGENT}>Urgent</option>
+          </select>
+          <select
+            value={filterReviewer}
+            onChange={(e) => setFilterReviewer(e.target.value)}
+            className="px-6 py-4 bg-white/80 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium cursor-pointer"
+          >
+            <option value="all">All Reviewers</option>
+            {reviewerOptions.map((reviewerName) => (
+              <option key={reviewerName} value={reviewerName}>
+                {reviewerName}
+              </option>
+            ))}
           </select>
         </div>
       </div>
 
-      {/* Tasks List with Advanced Cards */}
-      <div className="space-y-4">
-        {tasks.map((task, index) => (
-          <TaskCard key={task.id} task={task} index={index} />
-        ))}
-      </div>
+      {/* Tasks List */}
+      {filteredTasks.length === 0 ? (
+        <div className="bg-white/60 backdrop-blur-xl rounded-2xl shadow-xl border border-white/50 p-12 text-center">
+          <ListTodo className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-xl font-bold text-gray-900 mb-2">No tasks found</h3>
+          <p className="text-gray-600 mb-6">
+            {searchQuery || filterReviewer !== 'all' ? 'Try adjusting your filters or search criteria' : 'Get started by creating your first task'}
+          </p>
+          {canCreateTask && (
+            <button
+              onClick={() => {
+                setSelectedTask(null);
+                setShowForm(true);
+              }}
+              className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-blue-700 hover:to-purple-700 transition-all inline-flex items-center gap-2"
+            >
+              <Plus className="h-5 w-5" />
+              Create Task
+            </button>
+          )}
+        </div>
+      ) : view === 'list' ? (
+        <Table
+          columns={[
+            { key: 'title', label: 'Task', width: '25%' },
+            {
+              key: 'project',
+              label: 'Project',
+              width: '15%',
+              render: (task) => task.project_name || '-'
+            },
+            {
+              key: 'assigned_to',
+              label: 'Assigned To',
+              width: '12%',
+              render: (task) => getTaskAssigneeName(task) || 'Unassigned'
+            },
+            {
+              key: 'reviewer',
+              label: 'Reviewer',
+              width: '12%',
+              render: (task) => getReviewerName(task)
+            },
+            {
+              key: 'status',
+              label: 'Status',
+              width: '12%',
+              render: (task) => {
+                const statusConfig = {
+                  new: { bg: 'bg-gray-100', text: 'text-gray-800' },
+                  assigned: { bg: 'bg-blue-100', text: 'text-blue-800' },
+                  working: { bg: 'bg-orange-100', text: 'text-orange-800' },
+                  review_pending: { bg: 'bg-purple-100', text: 'text-purple-800' },
+                  approved: { bg: 'bg-green-100', text: 'text-green-800' },
+                  completed: { bg: 'bg-indigo-100', text: 'text-indigo-800' },
+                };
+                const status = statusConfig[task.status] || statusConfig.new;
+                return (
+                  <span className={`${status.bg} ${status.text} px-3 py-1 rounded-full text-xs font-bold`}>
+                    {TASK_STATUS_LABELS[task.status] || 'New'}
+                  </span>
+                );
+              }
+            },
+            {
+              key: 'priority',
+              label: 'Priority',
+              width: '10%',
+              render: (task) => {
+                const priorityConfig = {
+                  low: { bg: 'bg-gray-100', text: 'text-gray-800' },
+                  medium: { bg: 'bg-blue-100', text: 'text-blue-800' },
+                  high: { bg: 'bg-orange-100', text: 'text-orange-800' },
+                  urgent: { bg: 'bg-red-100', text: 'text-red-800' },
+                };
+                const priority = priorityConfig[task.priority] || priorityConfig.medium;
+                return (
+                  <span className={`${priority.bg} ${priority.text} px-3 py-1 rounded-full text-xs font-bold`}>
+                    {TASK_PRIORITY_LABELS[task.priority] || 'Medium'}
+                  </span>
+                );
+              }
+            },
+            {
+              key: 'due_date',
+              label: 'Due Date',
+              width: '10%',
+              render: (task) => task.due_date ? new Date(task.due_date).toLocaleDateString() : '-'
+            },
+            {
+              key: 'price',
+              label: 'Price',
+              width: '8%',
+              render: (task) => task.price ? formatCurrency(Number(task.price)) : '-'
+            },
+            {
+              key: 'actions',
+              label: 'Actions',
+              width: '5%',
+              render: (task) => (
+                <div className="flex gap-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate(`/tasks/${task.id}`);
+                    }}
+                    className="p-2 hover:bg-indigo-100 rounded-lg transition-colors"
+                    title="View"
+                  >
+                    <Eye className="h-4 w-4 text-indigo-600" />
+                  </button>
+                  {canCreateTask && (
+                    <>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedTask(task);
+                      setShowForm(true);
+                    }}
+                    className="p-2 hover:bg-blue-100 rounded-lg transition-colors"
+                    title="Edit"
+                  >
+                    <Edit className="h-4 w-4 text-blue-600" />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setTaskToDelete(task);
+                      setShowDeleteConfirm(true);
+                    }}
+                    className="p-2 hover:bg-red-100 rounded-lg transition-colors"
+                    title="Delete"
+                  >
+                    <Trash2 className="h-4 w-4 text-red-600" />
+                  </button>
+                    </>
+                  )}
+                </div>
+              )
+            }
+          ]}
+          data={filteredTasks}
+        />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredTasks.map((task, index) => (
+            <TaskCard
+              key={task.id}
+              task={task}
+              index={index}
+              onView={() => {
+                navigate(`/tasks/${task.id}`);
+              }}
+              onEdit={() => {
+                setSelectedTask(task);
+                setShowForm(true);
+              }}
+              onDelete={() => {
+                setTaskToDelete(task);
+                setShowDeleteConfirm(true);
+              }}
+              canEdit={canCreateTask}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Task Form Modal */}
+      {showForm && (
+        <TaskForm
+          task={selectedTask}
+          onClose={() => {
+            setShowForm(false);
+            setSelectedTask(null);
+          }}
+          onSuccess={handleFormSuccess}
+        />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && taskToDelete && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">Confirm Delete</h3>
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to delete task{' '}
+              <span className="font-semibold">{taskToDelete.title}</span>?
+              This action cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={handleDelete}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+              >
+                Delete
+              </button>
+              <button
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  setTaskToDelete(null);
+                }}
+                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function TaskCard({ task, index }) {
+function StatCard({ icon: Icon, label, value, color, iconBg, iconColor }) {
+  return (
+    <div className="group relative bg-white/60 backdrop-blur-xl rounded-xl shadow-lg border border-white/50 p-4 hover:shadow-xl transition-all duration-300">
+      <div className="flex items-center justify-between">
+        <div className="space-y-1">
+          <p className="text-xs font-semibold text-gray-600">{label}</p>
+          <p className={`text-3xl font-black bg-gradient-to-r ${color} bg-clip-text text-transparent`}>
+            {value}
+          </p>
+        </div>
+        <div className={`${iconBg} ${iconColor} p-3 rounded-xl shadow-lg`}>
+          <Icon className="h-5 w-5" />
+        </div>
+      </div>
+      <div className={`absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r ${color} rounded-b-xl`} />
+    </div>
+  );
+}
+
+function TaskCard({ task, index, onView, onEdit, onDelete, canEdit }) {
   const statusConfig = {
     new: { color: 'from-gray-400 to-gray-600', bg: 'bg-gray-100', text: 'text-gray-800', label: 'New' },
     assigned: { color: 'from-blue-400 to-blue-600', bg: 'bg-blue-100', text: 'text-blue-800', label: 'Assigned' },
@@ -196,84 +549,124 @@ function TaskCard({ task, index }) {
     urgent: { color: 'from-red-500 to-red-600', icon: '⬤' },
   };
 
-  const status = statusConfig[task.status];
-  const priority = priorityConfig[task.priority];
+  const status = statusConfig[task.status] || statusConfig.new;
+  const priority = priorityConfig[task.priority] || priorityConfig.medium;
 
   return (
     <div
-      className="group relative bg-white/70 backdrop-blur-xl rounded-2xl shadow-xl border border-white/50 hover:shadow-2xl transition-all duration-500 overflow-hidden hover:-translate-y-1"
-      style={{ animationDelay: `${index * 50}ms` }}
+      className="group relative bg-white/70 backdrop-blur-xl rounded-2xl shadow-lg border border-white/50 hover:shadow-2xl transition-all duration-300 overflow-hidden"
     >
-      {/* Gradient Border on Hover */}
-      <div className={`absolute inset-0 bg-gradient-to-r ${status.color} opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
+      <div className={`absolute inset-0 bg-gradient-to-r ${status.color} opacity-0 group-hover:opacity-5 transition-opacity duration-300`} />
       <div className="absolute inset-[2px] bg-white rounded-2xl" />
 
-      {/* Content */}
       <div className="relative z-10 p-6">
+        {/* Header with Title and Status */}
         <div className="flex items-start justify-between mb-4">
           <div className="flex-1 space-y-2">
-            <div className="flex items-center gap-3">
-              <span className={`text-2xl bg-gradient-to-r ${priority.color} bg-clip-text text-transparent`}>
+            <div className="flex items-center gap-2">
+              <span className={`text-xl bg-gradient-to-r ${priority.color} bg-clip-text text-transparent font-bold`}>
                 {priority.icon}
               </span>
               <h3 className="text-xl font-bold text-gray-900 group-hover:text-blue-600 transition-colors">
                 {task.title}
               </h3>
             </div>
-            <p className="text-gray-600 ml-8">{task.description}</p>
+            <p className="text-sm text-gray-600 line-clamp-2 leading-relaxed">{task.description || 'No description'}</p>
           </div>
-          <span className={`${status.bg} ${status.text} px-4 py-2 rounded-xl text-sm font-bold shadow-lg`}>
+          <span className={`${status.bg} ${status.text} px-3 py-1.5 rounded-lg text-xs font-bold shadow-md whitespace-nowrap ml-4`}>
             {status.label}
           </span>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
-          <div className="flex items-center gap-2 text-sm">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <Target className="h-4 w-4 text-blue-600" />
+        {/* Metadata Grid */}
+        <div className="space-y-3 mt-5">
+          {task.project_name && (
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-blue-100 rounded-lg flex-shrink-0 mt-0.5">
+                <Target className="h-4 w-4 text-blue-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-gray-500 mb-0.5">Project</p>
+                <p className="font-semibold text-gray-900 text-sm">{task.project_name}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs text-gray-500">Project</p>
-              <p className="font-semibold text-gray-900">{task.project}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 text-sm">
-            <div className="p-2 bg-purple-100 rounded-lg">
-              <User className="h-4 w-4 text-purple-600" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Assigned To</p>
-              <p className="font-semibold text-gray-900">{task.assigned_to}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 text-sm">
-            <div className="p-2 bg-green-100 rounded-lg">
-              <Calendar className="h-4 w-4 text-green-600" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Due Date</p>
-              <p className="font-semibold text-gray-900">{new Date(task.due_date).toLocaleDateString()}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 text-sm">
-            <div className="p-2 bg-emerald-100 rounded-lg">
-              <DollarSign className="h-4 w-4 text-emerald-600" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Price</p>
-              <p className="font-semibold text-gray-900">${task.price}</p>
+          )}
+
+          <div className="grid grid-cols-1 gap-3">
+            {task.due_date && (
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-green-100 rounded-lg flex-shrink-0">
+                  <Calendar className="h-4 w-4 text-green-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-500 mb-0.5">Due Date</p>
+                  <p className="font-semibold text-gray-900 text-sm">{new Date(task.due_date).toLocaleDateString()}</p>
+                </div>
+              </div>
+            )}
+
+            {task.price && (
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-emerald-100 rounded-lg flex-shrink-0">
+                  <DollarSign className="h-4 w-4 text-emerald-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-500 mb-0.5">Price</p>
+                  <p className="font-semibold text-gray-900 text-sm">{formatCurrency(Number(task.price))}</p>
+                </div>
+              </div>
+            )}
+
+            {getTaskAssigneeName(task) && (
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-purple-100 rounded-lg flex-shrink-0">
+                  <User className="h-4 w-4 text-purple-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-500 mb-0.5">Assigned To</p>
+                  <p className="font-semibold text-gray-900 text-sm">{getTaskAssigneeName(task)}</p>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-indigo-100 rounded-lg flex-shrink-0">
+                <User className="h-4 w-4 text-indigo-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-gray-500 mb-0.5">Reviewer</p>
+                <p className="font-semibold text-gray-900 text-sm">{getReviewerName(task)}</p>
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="mt-6 flex gap-3">
-          <button className="flex-1 bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 rounded-xl font-bold hover:from-blue-600 hover:to-purple-700 transition-all hover:scale-[1.02] shadow-lg hover:shadow-xl">
-            View Details
+        {/* Action Buttons */}
+        <div className="mt-5 pt-5 border-t border-gray-100 flex justify-end gap-2">
+          <button
+            onClick={onView}
+            className="p-2 hover:bg-indigo-100 rounded-lg transition-colors"
+            title="View"
+          >
+            <Eye className="h-4 w-4 text-indigo-600" />
           </button>
-          {task.status === 'review_pending' && (
-            <button className="px-6 bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 rounded-xl font-bold hover:from-green-600 hover:to-emerald-700 transition-all hover:scale-[1.02] shadow-lg hover:shadow-xl">
-              Review
-            </button>
+          {canEdit && (
+            <>
+              <button
+                onClick={onEdit}
+                className="p-2 hover:bg-blue-100 rounded-lg transition-colors"
+                title="Edit"
+              >
+                <Edit className="h-4 w-4 text-blue-600" />
+              </button>
+              <button
+                onClick={onDelete}
+                className="p-2 hover:bg-red-100 rounded-lg transition-colors"
+                title="Delete"
+              >
+                <Trash2 className="h-4 w-4 text-red-600" />
+              </button>
+            </>
           )}
         </div>
       </div>

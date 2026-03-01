@@ -5,6 +5,7 @@ import { API_BASE_URL } from '../../constants';
 import { toast } from 'sonner';
 import KPIForm from '../../components/hr/KPIForm';
 import KPIDetail from '../../components/hr/KPIDetail';
+import { PageHeader, StatCard, Button, EmptyState, Table, ViewToggle } from '../../components/ui';
 
 export default function KPIPage() {
   const [kpis, setKpis] = useState([]);
@@ -18,6 +19,7 @@ export default function KPIPage() {
   const [kpiToDelete, setKpiToDelete] = useState(null);
   const [showDetail, setShowDetail] = useState(false);
   const [kpiForDetail, setKpiForDetail] = useState(null);
+  const [view, setView] = useState('list');
 
   useEffect(() => {
     // Set default month to current month
@@ -50,7 +52,8 @@ export default function KPIPage() {
       const response = await axios.get(url, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const data = Array.isArray(response.data) ? response.data : [];
+      // Handle both paginated response (with results) and direct array
+      const data = response.data.results || (Array.isArray(response.data) ? response.data : []);
       setKpis(data);
     } catch (error) {
       console.error('Error fetching KPIs:', error);
@@ -67,7 +70,8 @@ export default function KPIPage() {
       const response = await axios.get(`${API_BASE_URL}/hr/employees/`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const data = Array.isArray(response.data) ? response.data : [];
+      // Handle both paginated response (with results) and direct array
+      const data = response.data.results || (Array.isArray(response.data) ? response.data : []);
       setEmployees(data);
     } catch (error) {
       console.error('Error fetching employees:', error);
@@ -125,11 +129,130 @@ export default function KPIPage() {
     }
   };
 
-  const handleFormSuccess = () => {
-    fetchKPIs();
+  const handleFormSuccess = async () => {
+    await fetchKPIs();
   };
 
   const averages = calculateAverages();
+
+  const columns = [
+    {
+      key: 'employee',
+      label: 'Employee',
+      width: '20%',
+      render: (kpi) => (
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-500 to-blue-600 flex items-center justify-center text-white font-bold">
+            {kpi.employee_details?.user_details?.full_name?.charAt(0) || 'E'}
+          </div>
+          <div>
+            <div className="font-semibold text-gray-900">
+              {kpi.employee_details?.user_details?.full_name || kpi.employee_details?.user_details?.username}
+            </div>
+            <div className="text-xs text-gray-500">{kpi.employee_details?.position}</div>
+          </div>
+        </div>
+      )
+    },
+    {
+      key: 'month',
+      label: 'Period',
+      width: '12%',
+      render: (kpi) => new Date(kpi.month).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+    },
+    {
+      key: 'tasks',
+      label: 'Tasks',
+      width: '12%',
+      render: (kpi) => (
+        <div className="text-sm">
+          <div className="font-semibold text-gray-900">{kpi.tasks_completed} completed</div>
+          <div className="text-xs text-gray-600">{kpi.tasks_on_time} on time ({kpi.on_time_percentage}%)</div>
+        </div>
+      )
+    },
+    {
+      key: 'quality_score',
+      label: 'Quality',
+      width: '10%',
+      render: (kpi) => (
+        <div className={`text-center px-2 py-1 rounded ${getScoreColor(kpi.quality_score)}`}>
+          <div className="font-bold">{kpi.quality_score}</div>
+        </div>
+      )
+    },
+    {
+      key: 'collaboration_score',
+      label: 'Collaboration',
+      width: '10%',
+      render: (kpi) => (
+        <div className={`text-center px-2 py-1 rounded ${getScoreColor(kpi.collaboration_score)}`}>
+          <div className="font-bold">{kpi.collaboration_score}</div>
+        </div>
+      )
+    },
+    {
+      key: 'innovation_score',
+      label: 'Innovation',
+      width: '10%',
+      render: (kpi) => (
+        <div className={`text-center px-2 py-1 rounded ${getScoreColor(kpi.innovation_score)}`}>
+          <div className="font-bold">{kpi.innovation_score}</div>
+        </div>
+      )
+    },
+    {
+      key: 'overall_score',
+      label: 'Overall',
+      width: '10%',
+      render: (kpi) => (
+        <div className={`text-center px-3 py-2 rounded-xl border-2 ${getScoreColor(kpi.overall_score)}`}>
+          <div className="text-xl font-bold">{kpi.overall_score}</div>
+        </div>
+      )
+    },
+    {
+      key: 'actions',
+      label: 'Actions',
+      width: '16%',
+      render: (kpi) => (
+        <div className="flex gap-1">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setKpiForDetail(kpi);
+              setShowDetail(true);
+            }}
+            className="p-1.5 hover:bg-indigo-100 rounded-lg transition-colors"
+            title="View"
+          >
+            <Eye className="h-3 w-3 text-indigo-600" />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleEdit(kpi);
+            }}
+            className="p-1.5 hover:bg-blue-100 rounded-lg transition-colors"
+            title="Edit"
+          >
+            <Edit className="h-3 w-3 text-blue-600" />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setKpiToDelete(kpi);
+              setShowDeleteConfirm(true);
+            }}
+            className="p-1.5 hover:bg-red-100 rounded-lg transition-colors"
+            title="Delete"
+          >
+            <Trash2 className="h-3 w-3 text-red-600" />
+          </button>
+        </div>
+      )
+    },
+  ];
 
   if (loading) {
     return (
@@ -140,117 +263,116 @@ export default function KPIPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-br from-green-500 to-blue-600 rounded-xl">
-              <TrendingUp className="h-8 w-8 text-white" />
-            </div>
-            KPI Dashboard
-          </h1>
-          <p className="text-gray-600 mt-1">Performance metrics and tracking</p>
-        </div>
-        <button
-          onClick={() => {
-            setSelectedKpi(null);
-            setShowForm(true);
-          }}
-          className="px-6 py-3 bg-gradient-to-r from-green-600 to-blue-600 text-white rounded-xl hover:from-green-700 hover:to-blue-700 transition-all duration-200 flex items-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105"
-        >
-          <Plus className="h-5 w-5" />
-          New KPI
-        </button>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
+      <div className="space-y-6">
+        {/* Header */}
+        <PageHeader
+          icon={TrendingUp}
+          title="KPI Dashboard"
+          subtitle="Performance metrics and tracking"
+          actions={
+            <>
+              <ViewToggle view={view} onViewChange={setView} />
+              <Button
+                variant="primary"
+                icon={Plus}
+                onClick={() => {
+                  setSelectedKpi(null);
+                  setShowForm(true);
+                }}
+              >
+                New KPI
+              </Button>
+            </>
+          }
+        />
 
-      {/* Filters */}
-      <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-white/20">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Month Selector */}
-          <div className="relative">
-            <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-            <input
-              type="month"
-              value={selectedMonth ? selectedMonth.substring(0, 7) : ''}
-              onChange={(e) => setSelectedMonth(`${e.target.value}-01`)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        {/* Filters */}
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-white/20">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Month Selector */}
+            <div className="relative">
+              <Calendar className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <input
+                type="month"
+                value={selectedMonth ? selectedMonth.substring(0, 7) : ''}
+                onChange={(e) => setSelectedMonth(`${e.target.value}-01`)}
+                className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* Employee Filter */}
+            <div className="relative">
+              <Users className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <select
+                value={filterEmployee}
+                onChange={(e) => setFilterEmployee(e.target.value)}
+                className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent appearance-none bg-white"
+              >
+                <option value="">All Employees</option>
+                {employees.map(emp => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.user_details?.full_name || emp.user_details?.username} ({emp.employee_id})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Summary Stats */}
+        {averages && (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <StatCard
+              icon={Target}
+              label="Total Tasks"
+              value={averages.totalTasks}
+              gradient="blue"
+            />
+            <StatCard
+              icon={Award}
+              label="On-Time Rate"
+              value={`${averages.onTimePercentage}%`}
+              gradient="green"
+            />
+            <StatCard
+              icon={BarChart}
+              label="Avg Quality"
+              value={averages.avgQuality}
+              gradient="purple"
+            />
+            <StatCard
+              icon={TrendingUp}
+              label="Overall Score"
+              value={averages.avgOverall}
+              gradient="yellow"
             />
           </div>
+        )}
 
-          {/* Employee Filter */}
-          <div className="relative">
-            <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-            <select
-              value={filterEmployee}
-              onChange={(e) => setFilterEmployee(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
-            >
-              <option value="">All Employees</option>
-              {employees.map(emp => (
-                <option key={emp.id} value={emp.id}>
-                  {emp.user_details?.full_name || emp.user_details?.username} ({emp.employee_id})
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      </div>
-
-      {/* Summary Stats */}
-      {averages && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-6 text-white shadow-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-blue-100 text-sm">Total Tasks</p>
-                <p className="text-3xl font-bold mt-1">{averages.totalTasks}</p>
-              </div>
-              <Target className="h-12 w-12 text-blue-200" />
-            </div>
-          </div>
-
-          <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl p-6 text-white shadow-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-green-100 text-sm">On-Time Rate</p>
-                <p className="text-3xl font-bold mt-1">{averages.onTimePercentage}%</p>
-              </div>
-              <Award className="h-12 w-12 text-green-200" />
-            </div>
-          </div>
-
-          <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl p-6 text-white shadow-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-purple-100 text-sm">Avg Quality</p>
-                <p className="text-3xl font-bold mt-1">{averages.avgQuality}</p>
-              </div>
-              <BarChart className="h-12 w-12 text-purple-200" />
-            </div>
-          </div>
-
-          <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl p-6 text-white shadow-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-orange-100 text-sm">Overall Score</p>
-                <p className="text-3xl font-bold mt-1">{averages.avgOverall}</p>
-              </div>
-              <TrendingUp className="h-12 w-12 text-orange-200" />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* KPI Cards */}
-      {kpis.length === 0 ? (
-        <div className="text-center py-12 bg-white/50 backdrop-blur-sm rounded-2xl border border-white/20">
-          <TrendingUp className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600 text-lg">No KPI data for selected period</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-6">
-          {kpis.map((kpi) => (
+        {/* KPI Cards/List */}
+        {kpis.length === 0 ? (
+          <EmptyState
+            icon={TrendingUp}
+            title="No KPI data for selected period"
+            description="Start by adding KPI records for your team"
+            action={
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setSelectedKpi(null);
+                  setShowForm(true);
+                }}
+              >
+                New KPI
+              </Button>
+            }
+          />
+        ) : view === 'list' ? (
+          <Table columns={columns} data={kpis} />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {kpis.map((kpi) => (
             <div
               key={kpi.id}
               className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-white/20 hover:shadow-xl transition-all duration-200"
@@ -345,16 +467,16 @@ export default function KPIPage() {
                     setKpiForDetail(kpi);
                     setShowDetail(true);
                   }}
-                  className="flex-1 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors text-sm font-medium flex items-center justify-center gap-2"
+                  className="flex-1 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:from-indigo-700 hover:to-purple-700 transition-all font-semibold shadow-lg hover:shadow-xl hover:scale-105 flex items-center justify-center gap-2"
                 >
-                  <Eye className="h-4 w-4" />
+                  <Eye className="h-5 w-5" />
                   View
                 </button>
                 <button
                   onClick={() => handleEdit(kpi)}
-                  className="flex-1 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium flex items-center justify-center gap-2"
+                  className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all font-semibold shadow-lg hover:shadow-xl hover:scale-105 flex items-center justify-center gap-2"
                 >
-                  <Edit className="h-4 w-4" />
+                  <Edit className="h-5 w-5" />
                   Edit
                 </button>
                 <button
@@ -362,18 +484,18 @@ export default function KPIPage() {
                     setKpiToDelete(kpi);
                     setShowDeleteConfirm(true);
                   }}
-                  className="flex-1 px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium flex items-center justify-center gap-2"
+                  className="flex-1 px-6 py-3 bg-gradient-to-r from-red-600 to-pink-600 text-white rounded-xl hover:from-red-700 hover:to-pink-700 transition-all font-semibold shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Trash2 className="h-5 w-5" />
                   Delete
                 </button>
               </div>
             </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
 
-      {/* KPI Detail Modal */}
+        {/* KPI Detail Modal */}
       {showDetail && kpiForDetail && (
         <KPIDetail
           kpi={kpiForDetail}
@@ -425,6 +547,7 @@ export default function KPIPage() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }
