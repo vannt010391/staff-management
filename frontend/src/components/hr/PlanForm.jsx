@@ -50,6 +50,9 @@ export default function PlanForm({ plan, onClose, onSuccess }) {
         case 'monthly':
           end = new Date(start.getFullYear(), start.getMonth() + 1, 0);
           break;
+        case 'quarterly':
+          end = new Date(start.getFullYear(), start.getMonth() + 3, 0);
+          break;
         case 'yearly':
           end = new Date(start.getFullYear(), 11, 31);
           break;
@@ -138,6 +141,7 @@ export default function PlanForm({ plan, onClose, onSuccess }) {
               <option value="daily">Daily Plan</option>
               <option value="weekly">Weekly Plan</option>
               <option value="monthly">Monthly Plan</option>
+              <option value="quarterly">Quarterly Plan</option>
               <option value="yearly">Yearly Plan</option>
             </select>
           </div>

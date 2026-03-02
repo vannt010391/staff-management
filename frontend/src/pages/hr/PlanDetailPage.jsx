@@ -3,6 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Calendar, Target, CheckCircle2, Clock, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import plansService from '../../services/plans';
+import PlanDailyTracking from '../../components/hr/PlanDailyTracking';
+import PlanUpdateHistory from '../../components/hr/PlanUpdateHistory';
 
 export default function PlanDetailPage() {
   const { id } = useParams();
@@ -73,6 +75,12 @@ export default function PlanDetailPage() {
               </div>
             )) : <p className="text-gray-500">No notes yet.</p>}
           </div>
+        </div>
+
+        {/* Daily Progress Tracking and Update History */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <PlanDailyTracking planId={plan.id} />
+          <PlanUpdateHistory planId={plan.id} />
         </div>
       </div>
     </div>

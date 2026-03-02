@@ -33,10 +33,12 @@ export default function EvaluationForm({ evaluation = null, onClose, onSuccess }
       const response = await axios.get(`${API_BASE_URL}/hr/employees/`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const data = Array.isArray(response.data) ? response.data : [];
+      // Handle paginated response from DRF
+      const data = response.data.results || (Array.isArray(response.data) ? response.data : []);
       setEmployees(data);
     } catch (error) {
       console.error('Error fetching employees:', error);
+      toast.error('Failed to load employees');
     }
   };
 

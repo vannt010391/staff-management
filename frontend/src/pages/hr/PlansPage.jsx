@@ -13,25 +13,67 @@ export default function PlansPage() {
   const [showForm, setShowForm] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [view, setView] = useState('list');
+  const [viewMode, setViewMode] = useState('my'); // 'my' or 'all'
 
   // Filters
   const [filterType, setFilterType] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [selectedDepartment, setSelectedDepartment] = useState('');
+  const [selectedEmployee, setSelectedEmployee] = useState('');
+
+  // Data for filters
+  const [departments, setDepartments] = useState([]);
+  const [employees, setEmployees] = useState([]);
 
   useEffect(() => {
     fetchPlans();
-  }, []);
+  }, [viewMode, selectedDepartment, selectedEmployee, filterType, filterStatus]);
+
+  useEffect(() => {
+    if (viewMode === 'all') {
+      fetchFilterData();
+    }
+  }, [viewMode]);
 
   const fetchPlans = async () => {
     try {
       setLoading(true);
-      const data = await plansService.getMyPlans();
+      let data;
+      if (viewMode === 'my') {
+        data = await plansService.getMyPlans();
+      } else {
+        // All plans with filters
+        const params = {};
+        if (selectedDepartment) params['user__employee_profile__department'] = selectedDepartment;
+        if (selectedEmployee) params.user = selectedEmployee;
+        if (filterType) params.plan_type = filterType;
+        if (filterStatus) params.status = filterStatus;
+        data = await plansService.getAllPlans(params);
+      }
       setPlans(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching plans:', error);
       toast.error('Failed to load plans');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchFilterData = async () => {
+    try {
+      // Fetch departments and employees for filters
+      const [deptResponse, empResponse] = await Promise.all([
+        fetch('/api/hr/departments/', { headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` } }),
+        fetch('/api/hr/employees/', { headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` } })
+      ]);
+
+      const depts = await deptResponse.json();
+      const emps = await empResponse.json();
+
+      setDepartments(Array.isArray(depts) ? depts : depts.results || []);
+      setEmployees(Array.isArray(emps) ? emps : emps.results || []);
+    } catch (error) {
+      console.error('Error fetching filter data:', error);
     }
   };
 
@@ -216,8 +258,34 @@ export default function PlansPage() {
         {/* Header */}
         <PageHeader
           icon={Target}
-          title="My Plans"
-          subtitle="Track your goals and progress"
+          title={
+            <div className="flex items-center gap-4">
+              <span>Plans</span>
+              <div className="flex bg-white rounded-lg p-1 shadow-sm">
+                <button
+                  onClick={() => setViewMode('my')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                    viewMode === 'my'
+                      ? 'bg-purple-600 text-white'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  My Plans
+                </button>
+                <button
+                  onClick={() => setViewMode('all')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                    viewMode === 'all'
+                      ? 'bg-purple-600 text-white'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  All Plans
+                </button>
+              </div>
+            </div>
+          }
+          subtitle={viewMode === 'my' ? 'Track your goals and progress' : 'View team plans and progress'}
           actions={
             <>
               <ViewToggle view={view} onViewChange={setView} />
@@ -268,6 +336,34 @@ export default function PlansPage() {
           <div className="flex flex-wrap items-center gap-4">
             <Filter className="w-5 h-5 text-gray-400" />
 
+            {viewMode === 'all' && (
+              <>
+                <select
+                  value={selectedDepartment}
+                  onChange={(e) => setSelectedDepartment(e.target.value)}
+                  className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all bg-white"
+                >
+                  <option value="">All Departments</option>
+                  {departments.map(dept => (
+                    <option key={dept.id} value={dept.id}>{dept.name}</option>
+                  ))}
+                </select>
+
+                <select
+                  value={selectedEmployee}
+                  onChange={(e) => setSelectedEmployee(e.target.value)}
+                  className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all bg-white"
+                >
+                  <option value="">All Employees</option>
+                  {employees.map(emp => (
+                    <option key={emp.id} value={emp.user}>
+                      {emp.user_details?.full_name || emp.user_details?.username || emp.employee_id}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
+
             <select
               value={filterType}
               onChange={(e) => setFilterType(e.target.value)}
@@ -277,6 +373,7 @@ export default function PlansPage() {
               <option value="daily">Daily</option>
               <option value="weekly">Weekly</option>
               <option value="monthly">Monthly</option>
+              <option value="quarterly">Quarterly</option>
               <option value="yearly">Yearly</option>
             </select>
 
@@ -292,11 +389,13 @@ export default function PlansPage() {
               <option value="archived">Archived</option>
             </select>
 
-            {(filterType || filterStatus) && (
+            {(filterType || filterStatus || selectedDepartment || selectedEmployee) && (
               <button
                 onClick={() => {
                   setFilterType('');
                   setFilterStatus('');
+                  setSelectedDepartment('');
+                  setSelectedEmployee('');
                 }}
                 className="text-sm text-gray-600 hover:text-gray-900 font-medium"
               >

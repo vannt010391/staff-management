@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Department, CareerPath, Employee, KPI, Evaluation, SalaryReview, PersonalReport, Plan, PlanGoal, PlanNote
+from .models import Department, CareerPath, Employee, KPI, Evaluation, SalaryReview, PersonalReport, Plan, PlanGoal, PlanNote, PlanDailyProgress, PlanUpdateHistory
 
 
 @admin.register(Department)
@@ -153,3 +153,21 @@ class PlanNoteAdmin(admin.ModelAdmin):
     list_filter = ['created_at']
     search_fields = ['note', 'plan__title']
     readonly_fields = ['created_at']
+
+
+@admin.register(PlanDailyProgress)
+class PlanDailyProgressAdmin(admin.ModelAdmin):
+    list_display = ['plan', 'date', 'completed_goals_count', 'hours_worked', 'completion_percentage_snapshot']
+    list_filter = ['date', 'plan__plan_type']
+    search_fields = ['plan__title', 'progress_notes']
+    readonly_fields = ['created_at', 'updated_at']
+    date_hierarchy = 'date'
+
+
+@admin.register(PlanUpdateHistory)
+class PlanUpdateHistoryAdmin(admin.ModelAdmin):
+    list_display = ['plan', 'action', 'changed_by', 'changed_at']
+    list_filter = ['action', 'changed_at']
+    search_fields = ['plan__title', 'change_description']
+    readonly_fields = ['changed_at']
+    date_hierarchy = 'changed_at'

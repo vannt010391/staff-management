@@ -447,6 +447,7 @@ class Plan(models.Model):
         ('daily', 'Daily Plan'),
         ('weekly', 'Weekly Plan'),
         ('monthly', 'Monthly Plan'),
+        ('quarterly', 'Quarterly Plan'),
         ('yearly', 'Yearly Plan'),
     ]
 
@@ -627,3 +628,113 @@ class PlanNote(models.Model):
 
     def __str__(self):
         return f"Note by {self.created_by.username} on {self.created_at.strftime('%Y-%m-%d')}"
+
+
+class PlanDailyProgress(models.Model):
+    """
+    Daily progress tracking for plans
+    Tracks what was completed each day
+    """
+    plan = models.ForeignKey(
+        Plan,
+        on_delete=models.CASCADE,
+        related_name='daily_progress'
+    )
+    date = models.DateField(help_text='Date of progress entry')
+
+    # Progress metrics
+    completed_goals_count = models.IntegerField(
+        default=0,
+        validators=[MinValueValidator(0)],
+        help_text='Goals completed on this day'
+    )
+    hours_worked = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        default=0,
+        validators=[MinValueValidator(0)],
+        help_text='Hours spent on plan this day'
+    )
+    progress_notes = models.TextField(
+        blank=True,
+        help_text='Notes about today\'s progress'
+    )
+    completion_percentage_snapshot = models.IntegerField(
+        default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        help_text='Plan completion % at end of day'
+    )
+
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-date']
+        unique_together = ['plan', 'date']
+        indexes = [
+            models.Index(fields=['plan', '-date']),
+        ]
+        verbose_name = 'Plan Daily Progress'
+        verbose_name_plural = 'Plan Daily Progress Entries'
+
+    def __str__(self):
+        return f"{self.plan.title} - {self.date.strftime('%Y-%m-%d')} ({self.completion_percentage_snapshot}%)"
+
+
+class PlanUpdateHistory(models.Model):
+    """
+    Audit trail for all plan changes
+    Tracks who changed what and when
+    """
+    ACTION_CHOICES = [
+        ('created', 'Created'),
+        ('updated', 'Updated'),
+        ('status_changed', 'Status Changed'),
+        ('goal_added', 'Goal Added'),
+        ('goal_completed', 'Goal Completed'),
+        ('reviewed', 'Reviewed by Manager'),
+    ]
+
+    plan = models.ForeignKey(
+        Plan,
+        on_delete=models.CASCADE,
+        related_name='update_history'
+    )
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='plan_changes'
+    )
+    changed_at = models.DateTimeField(auto_now_add=True)
+
+    # Store changes as JSON
+    previous_values = models.JSONField(
+        null=True,
+        blank=True,
+        help_text='Previous state before change'
+    )
+    current_values = models.JSONField(
+        null=True,
+        blank=True,
+        help_text='New state after change'
+    )
+    change_description = models.TextField(
+        blank=True,
+        help_text='Human-readable description of change'
+    )
+
+    # Metadata
+    class Meta:
+        ordering = ['-changed_at']
+        indexes = [
+            models.Index(fields=['plan', '-changed_at']),
+        ]
+        verbose_name = 'Plan Update History'
+        verbose_name_plural = 'Plan Update Histories'
+
+    def __str__(self):
+        user_name = self.changed_by.username if self.changed_by else 'System'
+        return f"{self.plan.title} - {self.action} by {user_name} at {self.changed_at.strftime('%Y-%m-%d %H:%M')}"

@@ -183,6 +183,82 @@ export const plansService = {
   async toggleGoalComplete(id) {
     const response = await api.post(`/hr/plan-goals/${id}/toggle_complete/`);
     return response.data;
+  },
+
+  // Daily Progress Tracking
+
+  /**
+   * Get daily progress entries for a plan
+   * @param {number} planId - Plan ID
+   * @param {Object} params - Query parameters (date, etc.)
+   * @returns {Promise} List of daily progress entries
+   */
+  async getDailyProgress(planId, params = {}) {
+    const response = await api.get('/hr/plan-daily-progress/', {
+      params: { plan: planId, ...params }
+    });
+    return response.data.results || (Array.isArray(response.data) ? response.data : []);
+  },
+
+  /**
+   * Log today's progress for a plan
+   * @param {number} planId - Plan ID
+   * @param {Object} data - Progress data (completed_goals_count, hours_worked, etc.)
+   * @returns {Promise} Created/updated progress entry
+   */
+  async logTodayProgress(planId, data) {
+    const response = await api.post('/hr/plan-daily-progress/log_today/', {
+      plan: planId,
+      ...data
+    });
+    return response.data;
+  },
+
+  /**
+   * Create daily progress entry
+   * @param {Object} data - Progress data (plan, date, completed_goals_count, etc.)
+   * @returns {Promise} Created progress entry
+   */
+  async createDailyProgress(data) {
+    const response = await api.post('/hr/plan-daily-progress/', data);
+    return response.data;
+  },
+
+  /**
+   * Update daily progress entry
+   * @param {number} id - Progress entry ID
+   * @param {Object} data - Updated progress data
+   * @returns {Promise} Updated progress entry
+   */
+  async updateDailyProgress(id, data) {
+    const response = await api.put(`/hr/plan-daily-progress/${id}/`, data);
+    return response.data;
+  },
+
+  // Update History
+
+  /**
+   * Get update history for a plan
+   * @param {number} planId - Plan ID
+   * @returns {Promise} List of update history entries
+   */
+  async getUpdateHistory(planId) {
+    const response = await api.get('/hr/plan-update-history/', {
+      params: { plan: planId }
+    });
+    return response.data.results || (Array.isArray(response.data) ? response.data : []);
+  },
+
+  // Enhanced filtering for All Plans view
+
+  /**
+   * Get all plans with filters (for managers/admins)
+   * @param {Object} params - Query parameters (user, department, plan_type, status, etc.)
+   * @returns {Promise} List of plans
+   */
+  async getAllPlans(params = {}) {
+    const response = await api.get('/hr/plans/', { params });
+    return response.data.results || (Array.isArray(response.data) ? response.data : []);
   }
 };
 

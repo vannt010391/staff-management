@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Department, CareerPath, Employee, KPI, Evaluation, SalaryReview, PersonalReport, Plan, PlanGoal, PlanNote
+from .models import Department, CareerPath, Employee, KPI, Evaluation, SalaryReview, PersonalReport, Plan, PlanGoal, PlanNote, PlanDailyProgress, PlanUpdateHistory
 from accounts.serializers import UserSerializer
 
 
@@ -44,9 +44,9 @@ class EmployeeSerializer(serializers.ModelSerializer):
                   'join_date', 'current_salary', 'last_salary_review', 'date_of_birth', 'citizen_id',
                   'address', 'emergency_contact_name', 'emergency_contact_phone', 'is_active', 'notes',
                   'years_of_service', 'created_at', 'updated_at']
-        read_only_fields = ['created_at', 'updated_at', 'years_of_service']
+        read_only_fields = ['created_at', 'updated_at', 'years_of_service', 'user']  # user is read-only on update
         extra_kwargs = {
-            'current_salary': {'write_only': False},  # Có thể được hiển thị tùy quyền
+            'current_salary': {'write_only': False},
             'citizen_id': {'write_only': True},
             'address': {'write_only': True},
             'emergency_contact_name': {'write_only': True},
@@ -55,7 +55,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
 
 
 class EmployeeListSerializer(serializers.ModelSerializer):
-    """Simplified serializer for list views - no sensitive data"""
+    """Simplified serializer for list views - includes current_salary for salary reviews"""
     user_details = serializers.SerializerMethodField()
     department_name = serializers.CharField(source='department.name', read_only=True)
     career_level_display = serializers.CharField(source='career_level.get_level_display', read_only=True)
@@ -64,7 +64,7 @@ class EmployeeListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Employee
         fields = ['id', 'employee_id', 'user_details', 'department_name', 'position',
-                  'career_level_display', 'join_date', 'years_of_service', 'is_active']
+                  'career_level_display', 'join_date', 'current_salary', 'years_of_service', 'is_active']
 
     def get_user_details(self, obj):
         return {
@@ -271,6 +271,8 @@ class PlanSerializer(serializers.ModelSerializer):
 
     goals = PlanGoalSerializer(many=True, read_only=True)
     notes = PlanNoteSerializer(many=True, read_only=True)
+    daily_progress = serializers.SerializerMethodField()
+    update_history = serializers.SerializerMethodField()
 
     reviewed_by_name = serializers.CharField(
         source='reviewed_by.get_full_name',
@@ -291,6 +293,51 @@ class PlanSerializer(serializers.ModelSerializer):
             'status_display', 'completion_percentage', 'manager_feedback',
             'reviewed_by', 'reviewed_by_name', 'reviewed_at', 'parent_plan',
             'parent_plan_title', 'is_active_period', 'total_goals', 'completed_goals',
-            'goals', 'notes', 'created_at', 'updated_at'
+            'goals', 'notes', 'daily_progress', 'update_history', 'created_at', 'updated_at'
         ]
         read_only_fields = ['user', 'completion_percentage', 'reviewed_at', 'created_at', 'updated_at']
+
+    def get_daily_progress(self, obj):
+        # Return empty list to avoid circular import issues
+        # Full daily progress will be fetched via separate endpoint
+        return []
+
+    def get_update_history(self, obj):
+        # Return empty list to avoid circular import issues
+        # Full history will be fetched via separate endpoint
+        return []
+
+
+class PlanDailyProgressSerializer(serializers.ModelSerializer):
+    """Serializer for daily progress tracking"""
+    class Meta:
+        model = PlanDailyProgress
+        fields = [
+            'id', 'plan', 'date', 'completed_goals_count',
+            'hours_worked', 'progress_notes',
+            'completion_percentage_snapshot',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+
+
+class PlanUpdateHistorySerializer(serializers.ModelSerializer):
+    """Serializer for plan update history"""
+    changed_by_name = serializers.CharField(
+        source='changed_by.get_full_name',
+        read_only=True,
+        allow_null=True
+    )
+    action_display = serializers.CharField(
+        source='get_action_display',
+        read_only=True
+    )
+
+    class Meta:
+        model = PlanUpdateHistory
+        fields = [
+            'id', 'plan', 'action', 'action_display',
+            'changed_by', 'changed_by_name', 'changed_at',
+            'previous_values', 'current_values', 'change_description'
+        ]
+        read_only_fields = ['changed_by', 'changed_at']

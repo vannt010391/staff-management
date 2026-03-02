@@ -32,7 +32,12 @@ export default function EmployeeForm({ employee = null, onClose, onSuccess }) {
     fetchUsers();
     fetchDepartments();
     fetchCareerPaths();
-  }, []);
+
+    // If editing, fetch full employee details
+    if (employee?.id) {
+      fetchEmployeeDetails(employee.id);
+    }
+  }, [employee?.id]);
 
   const fetchUsers = async () => {
     try {
@@ -40,13 +45,14 @@ export default function EmployeeForm({ employee = null, onClose, onSuccess }) {
       const response = await axios.get(`${API_BASE_URL}/users/`, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      // Handle paginated response from DRF
+      const allUsers = response.data.results || (Array.isArray(response.data) ? response.data : []);
       // Filter only internal team roles
-      const internalUsers = Array.isArray(response.data)
-        ? response.data.filter(u => ['admin', 'manager', 'team_lead', 'staff'].includes(u.role))
-        : [];
+      const internalUsers = allUsers.filter(u => ['admin', 'manager', 'team_lead', 'staff'].includes(u.role));
       setUsers(internalUsers);
     } catch (error) {
       console.error('Error fetching users:', error);
+      toast.error('Failed to load users');
     }
   };
 
@@ -56,10 +62,12 @@ export default function EmployeeForm({ employee = null, onClose, onSuccess }) {
       const response = await axios.get(`${API_BASE_URL}/hr/departments/`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const data = Array.isArray(response.data) ? response.data : [];
+      // Handle paginated response from DRF
+      const data = response.data.results || (Array.isArray(response.data) ? response.data : []);
       setDepartments(data);
     } catch (error) {
       console.error('Error fetching departments:', error);
+      toast.error('Failed to load departments');
     }
   };
 
@@ -69,10 +77,43 @@ export default function EmployeeForm({ employee = null, onClose, onSuccess }) {
       const response = await axios.get(`${API_BASE_URL}/hr/career-paths/`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const data = Array.isArray(response.data) ? response.data : [];
+      // Handle paginated response from DRF
+      const data = response.data.results || (Array.isArray(response.data) ? response.data : []);
       setCareerPaths(data);
     } catch (error) {
       console.error('Error fetching career paths:', error);
+      toast.error('Failed to load career paths');
+    }
+  };
+
+  const fetchEmployeeDetails = async (employeeId) => {
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await axios.get(`${API_BASE_URL}/hr/employees/${employeeId}/`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      // Update formData with full employee details
+      const emp = response.data;
+      setFormData({
+        user: emp.user || '',
+        employee_id: emp.employee_id || '',
+        department: emp.department || '',
+        career_level: emp.career_level || '',
+        position: emp.position || '',
+        contract_type: emp.contract_type || 'fulltime',
+        join_date: emp.join_date || '',
+        current_salary: emp.current_salary || '',
+        date_of_birth: emp.date_of_birth || '',
+        citizen_id: emp.citizen_id || '',
+        address: emp.address || '',
+        emergency_contact_name: emp.emergency_contact_name || '',
+        emergency_contact_phone: emp.emergency_contact_phone || '',
+        is_active: emp.is_active ?? true,
+        notes: emp.notes || '',
+      });
+    } catch (error) {
+      console.error('Error fetching employee details:', error);
+      toast.error('Failed to load employee details');
     }
   };
 
@@ -96,7 +137,21 @@ export default function EmployeeForm({ employee = null, onClose, onSuccess }) {
 
       const method = employee ? 'put' : 'post';
 
-      await axios[method](url, formData, {
+      // Convert empty strings to null for optional FK fields
+      const submitData = {
+        ...formData,
+        department: formData.department || null,
+        career_level: formData.career_level || null,
+        date_of_birth: formData.date_of_birth || null,
+      };
+
+      // Ensure user field has a value (required by backend)
+      if (!submitData.user && employee) {
+        // If user is empty but we're editing, keep the original user
+        submitData.user = employee.user;
+      }
+
+      await axios[method](url, submitData, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -105,17 +160,35 @@ export default function EmployeeForm({ employee = null, onClose, onSuccess }) {
       onClose();
     } catch (error) {
       console.error('Error saving employee:', error);
-      toast.error(error.response?.data?.detail || 'Failed to save employee');
+      console.error('Error response:', error.response?.data);
+
+      // Handle validation errors
+      if (error.response?.data) {
+        const errors = error.response.data;
+        if (typeof errors === 'object' && !errors.detail && !errors.message) {
+          // Field-specific errors
+          const errorMessages = Object.entries(errors)
+            .map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`)
+            .join('; ');
+          toast.error(errorMessages || 'Validation error');
+        } else {
+          // General error message
+          const errorMsg = errors.detail || errors.message || 'Failed to save employee';
+          toast.error(errorMsg);
+        }
+      } else {
+        toast.error('Failed to save employee');
+      }
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl p-6 max-w-4xl w-full shadow-2xl my-8">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl w-full max-w-4xl shadow-2xl max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between p-6 border-b">
           <h2 className="text-2xl font-bold text-gray-900">
             {employee ? 'Edit Employee' : 'Add New Employee'}
           </h2>
@@ -127,8 +200,8 @@ export default function EmployeeForm({ employee = null, onClose, onSuccess }) {
           </button>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Form - Scrollable Content */}
+        <form id="employee-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* User Selection */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
@@ -381,24 +454,30 @@ export default function EmployeeForm({ employee = null, onClose, onSuccess }) {
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex gap-3 pt-6 border-t">
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? 'Saving...' : employee ? 'Update Employee' : 'Create Employee'}
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
-            >
-              Cancel
-            </button>
-          </div>
         </form>
+
+        {/* Action Buttons - Sticky Footer */}
+        <div className="flex gap-3 p-6 border-t bg-gray-50">
+          <button
+            type="submit"
+            form="employee-form"
+            disabled={loading}
+            className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={(e) => {
+              e.preventDefault();
+              document.getElementById('employee-form').requestSubmit();
+            }}
+          >
+            {loading ? 'Saving...' : employee ? 'Update Employee' : 'Create Employee'}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+          >
+            Cancel
+          </button>
+        </div>
       </div>
     </div>
   );

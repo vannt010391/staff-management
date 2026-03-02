@@ -5,14 +5,15 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
 from datetime import datetime
 
-from .models import Department, CareerPath, Employee, KPI, Evaluation, SalaryReview, PersonalReport, Plan, PlanGoal, PlanNote
+from .models import Department, CareerPath, Employee, KPI, Evaluation, SalaryReview, PersonalReport, Plan, PlanGoal, PlanNote, PlanDailyProgress, PlanUpdateHistory
 from .serializers import (
     DepartmentSerializer, CareerPathSerializer,
     EmployeeSerializer, EmployeeListSerializer,
     KPISerializer, EvaluationSerializer, EvaluationListSerializer,
     SalaryReviewSerializer, SalaryReviewListSerializer,
     PersonalReportSerializer, PersonalReportListSerializer,
-    PlanSerializer, PlanListSerializer, PlanGoalSerializer, PlanNoteSerializer
+    PlanSerializer, PlanListSerializer, PlanGoalSerializer, PlanNoteSerializer,
+    PlanDailyProgressSerializer, PlanUpdateHistorySerializer
 )
 from .permissions import (
     IsAdminOrManager, IsAdminOrManagerOrSelf, CanManageHR,
@@ -422,7 +423,7 @@ class PlanViewSet(viewsets.ModelViewSet):
     queryset = Plan.objects.all()
     permission_classes = [IsAdminOrManagerOrSelf]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['user', 'plan_type', 'status', 'period_start']
+    filterset_fields = ['user', 'plan_type', 'status', 'period_start', 'user__employee_profile__department']
     search_fields = ['title', 'description', 'user__username']
     ordering_fields = ['period_start', 'created_at', 'completion_percentage']
     ordering = ['-period_start']
@@ -468,8 +469,56 @@ class PlanViewSet(viewsets.ModelViewSet):
         return Plan.objects.filter(user=user)
 
     def perform_create(self, serializer):
-        """Auto-set user based on logged-in user"""
-        serializer.save(user=self.request.user)
+        """Auto-set user and create history entry"""
+        plan = serializer.save(user=self.request.user)
+        # Create history entry
+        PlanUpdateHistory.objects.create(
+            plan=plan,
+            action='created',
+            changed_by=self.request.user,
+            current_values={'title': plan.title, 'plan_type': plan.plan_type, 'status': plan.status},
+            change_description=f'Plan created: {plan.title}'
+        )
+
+    def perform_update(self, serializer):
+        """Track changes in history"""
+        plan = serializer.instance
+        # Capture previous values
+        previous = {
+            'status': plan.status,
+            'completion_percentage': plan.completion_percentage,
+            'title': plan.title,
+            'description': plan.description,
+        }
+
+        # Save updates
+        updated_plan = serializer.save()
+
+        # Check what changed
+        changes = []
+        if previous['status'] != updated_plan.status:
+            changes.append(f"Status: {previous['status']} → {updated_plan.status}")
+        if previous['completion_percentage'] != updated_plan.completion_percentage:
+            changes.append(f"Progress: {previous['completion_percentage']}% → {updated_plan.completion_percentage}%")
+        if previous['title'] != updated_plan.title:
+            changes.append(f"Title: {previous['title']} → {updated_plan.title}")
+        if previous['description'] != updated_plan.description:
+            changes.append('Description updated')
+
+        if changes:
+            PlanUpdateHistory.objects.create(
+                plan=updated_plan,
+                action='status_changed' if previous['status'] != updated_plan.status else 'updated',
+                changed_by=self.request.user,
+                previous_values=previous,
+                current_values={
+                    'status': updated_plan.status,
+                    'completion_percentage': updated_plan.completion_percentage,
+                    'title': updated_plan.title,
+                    'description': updated_plan.description,
+                },
+                change_description='; '.join(changes)
+            )
 
     @action(detail=True, methods=['post'])
     def add_goal(self, request, pk=None):
@@ -612,3 +661,73 @@ class PlanNoteViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
+
+
+class PlanDailyProgressViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing daily progress entries
+    """
+    queryset = PlanDailyProgress.objects.all()
+    serializer_class = PlanDailyProgressSerializer
+    permission_classes = [IsAdminOrManagerOrSelf]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['plan', 'date']
+    ordering_fields = ['date']
+    ordering = ['-date']
+
+    def get_queryset(self):
+        """Filter based on plan access permissions"""
+        user = self.request.user
+        if user.role == 'admin' or user.is_superuser:
+            return PlanDailyProgress.objects.all()
+        # Users can only see progress for plans they have access to
+        accessible_plans = Plan.objects.filter(user=user)
+        return PlanDailyProgress.objects.filter(plan__in=accessible_plans)
+
+    @action(detail=False, methods=['post'])
+    def log_today(self, request):
+        """Quick endpoint to log today's progress"""
+        plan_id = request.data.get('plan')
+        today = timezone.now().date()
+
+        progress, created = PlanDailyProgress.objects.get_or_create(
+            plan_id=plan_id,
+            date=today,
+            defaults={
+                'completed_goals_count': request.data.get('completed_goals_count', 0),
+                'hours_worked': request.data.get('hours_worked', 0),
+                'progress_notes': request.data.get('progress_notes', ''),
+                'completion_percentage_snapshot': request.data.get('completion_percentage_snapshot', 0)
+            }
+        )
+
+        if not created:
+            # Update existing entry
+            for field in ['completed_goals_count', 'hours_worked', 'progress_notes', 'completion_percentage_snapshot']:
+                if field in request.data:
+                    setattr(progress, field, request.data[field])
+            progress.save()
+
+        serializer = self.get_serializer(progress)
+        return Response(serializer.data)
+
+
+class PlanUpdateHistoryViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet for viewing plan update history (read-only)
+    """
+    queryset = PlanUpdateHistory.objects.all()
+    serializer_class = PlanUpdateHistorySerializer
+    permission_classes = [IsAdminOrManagerOrSelf]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['plan', 'action', 'changed_by']
+    ordering_fields = ['changed_at']
+    ordering = ['-changed_at']
+
+    def get_queryset(self):
+        """Filter based on plan access permissions"""
+        user = self.request.user
+        if user.role == 'admin' or user.is_superuser:
+            return PlanUpdateHistory.objects.all()
+        accessible_plans = Plan.objects.filter(user=user)
+        return PlanUpdateHistory.objects.filter(plan__in=accessible_plans)
