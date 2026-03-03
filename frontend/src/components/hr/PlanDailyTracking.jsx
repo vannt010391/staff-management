@@ -7,10 +7,9 @@ export default function PlanDailyTracking({ planId }) {
   const [dailyProgress, setDailyProgress] = useState([]);
   const [loading, setLoading] = useState(true);
   const [todayEntry, setTodayEntry] = useState({
-    completed_goals_count: 0,
     hours_worked: 0,
-    progress_notes: '',
-    completion_percentage_snapshot: 0
+    blockers: '',
+    next_plan: ''
   });
 
   useEffect(() => {
@@ -36,10 +35,9 @@ export default function PlanDailyTracking({ planId }) {
       toast.success('Daily progress logged successfully');
       fetchDailyProgress();
       setTodayEntry({
-        completed_goals_count: 0,
         hours_worked: 0,
-        progress_notes: '',
-        completion_percentage_snapshot: 0
+        blockers: '',
+        next_plan: ''
       });
     } catch (error) {
       console.error('Error logging progress:', error);
@@ -56,23 +54,7 @@ export default function PlanDailyTracking({ planId }) {
           Log Today's Progress
         </h3>
 
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Goals Completed Today
-            </label>
-            <input
-              type="number"
-              min="0"
-              value={todayEntry.completed_goals_count}
-              onChange={(e) => setTodayEntry(prev => ({
-                ...prev,
-                completed_goals_count: parseInt(e.target.value) || 0
-              }))}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
-            />
-          </div>
-
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Hours Worked
@@ -93,16 +75,32 @@ export default function PlanDailyTracking({ planId }) {
 
         <div className="mb-4">
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Progress Notes
+            Improvement / Next Plan
           </label>
           <textarea
             rows={3}
-            value={todayEntry.progress_notes}
+            value={todayEntry.next_plan}
             onChange={(e) => setTodayEntry(prev => ({
               ...prev,
-              progress_notes: e.target.value
+              next_plan: e.target.value
             }))}
-            placeholder="What did you accomplish today?"
+            placeholder="What should be improved or prioritized next?"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+          />
+        </div>
+
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Blockers / Issues
+          </label>
+          <textarea
+            rows={3}
+            value={todayEntry.blockers}
+            onChange={(e) => setTodayEntry(prev => ({
+              ...prev,
+              blockers: e.target.value
+            }))}
+            placeholder="What blocked progress today?"
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
           />
         </div>
@@ -159,7 +157,16 @@ export default function PlanDailyTracking({ planId }) {
                     </div>
                   </div>
                   {entry.progress_notes && (
-                    <p className="text-sm text-gray-700">{entry.progress_notes}</p>
+                    <p className="text-sm text-gray-700 mb-1"><span className="font-medium">Notes:</span> {entry.progress_notes}</p>
+                  )}
+                  {entry.work_results && (
+                    <p className="text-sm text-gray-700 mb-1"><span className="font-medium">Results:</span> {entry.work_results}</p>
+                  )}
+                  {entry.blockers && (
+                    <p className="text-sm text-amber-700 mb-1"><span className="font-medium">Blockers:</span> {entry.blockers}</p>
+                  )}
+                  {entry.next_plan && (
+                    <p className="text-sm text-indigo-700"><span className="font-medium">Next:</span> {entry.next_plan}</p>
                   )}
                 </div>
               </div>

@@ -1,6 +1,7 @@
-from rest_framework import viewsets, status, filters
+from rest_framework import viewsets, status, filters, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from django.contrib.auth import get_user_model
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
 from datetime import datetime
@@ -19,6 +20,7 @@ from .permissions import (
     IsAdminOrManager, IsAdminOrManagerOrSelf, CanManageHR,
     CanApproveSalaryReview, CanReviewReport
 )
+from .services import build_daily_progress_snapshot
 
 
 class DepartmentViewSet(viewsets.ModelViewSet):
@@ -468,31 +470,73 @@ class PlanViewSet(viewsets.ModelViewSet):
         # All other users see only their own plans
         return Plan.objects.filter(user=user)
 
+    def _get_assignable_user_queryset(self):
+        """Users that request.user can create/assign plans for."""
+        user = self.request.user
+        User = get_user_model()
+
+        if user.role == 'admin' or user.is_superuser:
+            return User.objects.filter(is_active=True)
+
+        if user.role in ['manager', 'team_lead']:
+            managed_departments = user.managed_departments.all()
+            if managed_departments.exists():
+                staff_user_ids = Employee.objects.filter(
+                    department__in=managed_departments,
+                    is_active=True
+                ).values_list('user_id', flat=True)
+                return User.objects.filter(id__in=list(staff_user_ids) + [user.id], is_active=True)
+
+            return User.objects.filter(id=user.id, is_active=True)
+
+        return User.objects.filter(id=user.id, is_active=True)
+
+    def _resolve_target_user(self, serializer, fallback_user):
+        requested_user = serializer.validated_data.get('user')
+        if requested_user is None:
+            return fallback_user
+
+        assignable_user_ids = set(self._get_assignable_user_queryset().values_list('id', flat=True))
+        if requested_user.id not in assignable_user_ids:
+            return None
+
+        return requested_user
+
     def perform_create(self, serializer):
-        """Auto-set user and create history entry"""
-        plan = serializer.save(user=self.request.user)
+        """Create plan for self or allowed target user and create history entry"""
+        target_user = self._resolve_target_user(serializer, self.request.user)
+        if target_user is None:
+            raise serializers.ValidationError({'user': 'You do not have permission to create plan for this user.'})
+
+        plan = serializer.save(user=target_user)
         # Create history entry
         PlanUpdateHistory.objects.create(
             plan=plan,
             action='created',
             changed_by=self.request.user,
             current_values={'title': plan.title, 'plan_type': plan.plan_type, 'status': plan.status},
-            change_description=f'Plan created: {plan.title}'
+            change_description=f'Plan created for {target_user.username}: {plan.title}'
         )
 
     def perform_update(self, serializer):
         """Track changes in history"""
         plan = serializer.instance
+        previous_owner_username = plan.user.username
+        target_user = self._resolve_target_user(serializer, plan.user)
+        if target_user is None:
+            raise serializers.ValidationError({'user': 'You do not have permission to assign this user.'})
+
         # Capture previous values
         previous = {
             'status': plan.status,
             'completion_percentage': plan.completion_percentage,
             'title': plan.title,
             'description': plan.description,
+            'user_id': plan.user_id,
         }
 
         # Save updates
-        updated_plan = serializer.save()
+        updated_plan = serializer.save(user=target_user)
 
         # Check what changed
         changes = []
@@ -504,6 +548,8 @@ class PlanViewSet(viewsets.ModelViewSet):
             changes.append(f"Title: {previous['title']} → {updated_plan.title}")
         if previous['description'] != updated_plan.description:
             changes.append('Description updated')
+        if previous['user_id'] != updated_plan.user_id:
+            changes.append(f"Owner: {previous_owner_username} → {updated_plan.user.username}")
 
         if changes:
             PlanUpdateHistory.objects.create(
@@ -516,9 +562,34 @@ class PlanViewSet(viewsets.ModelViewSet):
                     'completion_percentage': updated_plan.completion_percentage,
                     'title': updated_plan.title,
                     'description': updated_plan.description,
+                    'user_id': updated_plan.user_id,
                 },
                 change_description='; '.join(changes)
             )
+
+    @action(detail=False, methods=['get'])
+    def assignable_users(self, request):
+        """Users that current user can assign plans to."""
+        users = self._get_assignable_user_queryset().order_by('first_name', 'last_name', 'username')
+        data = []
+
+        employee_map = {
+            employee.user_id: employee
+            for employee in Employee.objects.filter(user_id__in=users.values_list('id', flat=True)).select_related('department')
+        }
+
+        for user in users:
+            employee = employee_map.get(user.id)
+            full_name = user.get_full_name() or user.username
+            data.append({
+                'id': user.id,
+                'username': user.username,
+                'full_name': full_name,
+                'role': user.role,
+                'department_name': employee.department.name if employee and employee.department else None,
+            })
+
+        return Response(data)
 
     @action(detail=True, methods=['post'])
     def add_goal(self, request, pk=None):
@@ -690,22 +761,43 @@ class PlanDailyProgressViewSet(viewsets.ModelViewSet):
         plan_id = request.data.get('plan')
         today = timezone.now().date()
 
+        if not plan_id:
+            return Response({'error': 'plan is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        plan = self.get_queryset().filter(id=plan_id).first()
+        if not plan:
+            return Response({'error': 'Plan not found or access denied'}, status=status.HTTP_404_NOT_FOUND)
+
+        manual_inputs = {
+            'hours_worked': request.data.get('hours_worked', 0),
+            'blockers': request.data.get('blockers', ''),
+            'next_plan': request.data.get('next_plan', ''),
+            'work_results': request.data.get('work_results', ''),
+        }
+        snapshot = build_daily_progress_snapshot(plan, today, manual_inputs=manual_inputs)
+
         progress, created = PlanDailyProgress.objects.get_or_create(
             plan_id=plan_id,
             date=today,
             defaults={
-                'completed_goals_count': request.data.get('completed_goals_count', 0),
-                'hours_worked': request.data.get('hours_worked', 0),
-                'progress_notes': request.data.get('progress_notes', ''),
-                'completion_percentage_snapshot': request.data.get('completion_percentage_snapshot', 0)
+                'completed_goals_count': snapshot['completed_goals_count'],
+                'hours_worked': snapshot['hours_worked'],
+                'progress_notes': snapshot['progress_notes'],
+                'work_results': snapshot['work_results'],
+                'blockers': snapshot['blockers'],
+                'next_plan': snapshot['next_plan'],
+                'completion_percentage_snapshot': snapshot['completion_percentage_snapshot']
             }
         )
 
         if not created:
-            # Update existing entry
-            for field in ['completed_goals_count', 'hours_worked', 'progress_notes', 'completion_percentage_snapshot']:
-                if field in request.data:
-                    setattr(progress, field, request.data[field])
+            progress.completed_goals_count = snapshot['completed_goals_count']
+            progress.hours_worked = snapshot['hours_worked']
+            progress.progress_notes = snapshot['progress_notes']
+            progress.work_results = snapshot['work_results']
+            progress.blockers = snapshot['blockers']
+            progress.next_plan = snapshot['next_plan']
+            progress.completion_percentage_snapshot = snapshot['completion_percentage_snapshot']
             progress.save()
 
         serializer = self.get_serializer(progress)

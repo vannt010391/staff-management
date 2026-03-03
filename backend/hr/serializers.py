@@ -245,10 +245,14 @@ class PlanNoteSerializer(serializers.ModelSerializer):
 
 class PlanListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for list views"""
-    user_name = serializers.CharField(source='user.get_full_name', read_only=True)
+    user_name = serializers.SerializerMethodField()
     plan_type_display = serializers.CharField(source='get_plan_type_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     is_active_period = serializers.ReadOnlyField()
+
+    def get_user_name(self, obj):
+        full_name = obj.user.get_full_name()
+        return full_name if full_name else obj.user.username
 
     class Meta:
         model = Plan
@@ -257,12 +261,12 @@ class PlanListSerializer(serializers.ModelSerializer):
             'period_start', 'period_end', 'title', 'status', 'status_display',
             'completion_percentage', 'is_active_period', 'created_at'
         ]
-        read_only_fields = ['user', 'completion_percentage', 'created_at']
+        read_only_fields = ['completion_percentage', 'created_at']
 
 
 class PlanSerializer(serializers.ModelSerializer):
     """Full serializer with nested data"""
-    user_name = serializers.CharField(source='user.get_full_name', read_only=True)
+    user_name = serializers.SerializerMethodField()
     plan_type_display = serializers.CharField(source='get_plan_type_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     is_active_period = serializers.ReadOnlyField()
@@ -285,6 +289,10 @@ class PlanSerializer(serializers.ModelSerializer):
         allow_null=True
     )
 
+    def get_user_name(self, obj):
+        full_name = obj.user.get_full_name()
+        return full_name if full_name else obj.user.username
+
     class Meta:
         model = Plan
         fields = [
@@ -295,7 +303,7 @@ class PlanSerializer(serializers.ModelSerializer):
             'parent_plan_title', 'is_active_period', 'total_goals', 'completed_goals',
             'goals', 'notes', 'daily_progress', 'update_history', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['user', 'completion_percentage', 'reviewed_at', 'created_at', 'updated_at']
+        read_only_fields = ['completion_percentage', 'reviewed_at', 'created_at', 'updated_at']
 
     def get_daily_progress(self, obj):
         # Return empty list to avoid circular import issues
@@ -314,7 +322,7 @@ class PlanDailyProgressSerializer(serializers.ModelSerializer):
         model = PlanDailyProgress
         fields = [
             'id', 'plan', 'date', 'completed_goals_count',
-            'hours_worked', 'progress_notes',
+            'hours_worked', 'progress_notes', 'work_results', 'blockers', 'next_plan',
             'completion_percentage_snapshot',
             'created_at', 'updated_at'
         ]

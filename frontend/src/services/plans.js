@@ -259,6 +259,15 @@ export const plansService = {
   async getAllPlans(params = {}) {
     const response = await api.get('/hr/plans/', { params });
     return response.data.results || (Array.isArray(response.data) ? response.data : []);
+  },
+
+  /**
+   * Get users that current user can assign plans to
+   * @returns {Promise} List of assignable users
+   */
+  async getAssignableUsers() {
+    const response = await api.get('/hr/plans/assignable_users/');
+    return response.data.results || (Array.isArray(response.data) ? response.data : []);
   }
 };
 

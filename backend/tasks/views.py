@@ -21,7 +21,7 @@ from .serializers import (
     TaskFileSerializer,
     TaskCommentSerializer
 )
-from accounts.permissions import IsManagerOrAdmin, IsOwnerOrManagerOrAdmin
+from accounts.permissions import IsManagerOrAdmin, IsOwnerOrManagerOrAdmin, CanCreateTask
 from notifications.services import (
     create_task_assigned_notification,
     create_task_status_changed_notification,
@@ -167,6 +167,8 @@ class TaskViewSet(viewsets.ModelViewSet):
         Freelancer can only view and update status of their tasks
         """
         if self.action in ['create', 'destroy']:
+            if self.action == 'create':
+                return [CanCreateTask()]
             return [IsManagerOrAdmin()]
         elif self.action in ['update', 'partial_update']:
             # Manager/Admin can update any task

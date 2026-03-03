@@ -659,6 +659,18 @@ class PlanDailyProgress(models.Model):
         blank=True,
         help_text='Notes about today\'s progress'
     )
+    work_results = models.TextField(
+        blank=True,
+        help_text='Key outcomes/deliverables completed today'
+    )
+    blockers = models.TextField(
+        blank=True,
+        help_text='Issues/blockers encountered today'
+    )
+    next_plan = models.TextField(
+        blank=True,
+        help_text='Next steps planned for upcoming work'
+    )
     completion_percentage_snapshot = models.IntegerField(
         default=0,
         validators=[MinValueValidator(0), MaxValueValidator(100)],

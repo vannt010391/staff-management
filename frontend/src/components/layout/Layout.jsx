@@ -273,6 +273,7 @@ function getNavigationItems(role) {
         { name: 'Projects', href: '/projects', icon: FolderKanban },
         { name: 'Topics', href: '/topics', icon: Tag },
         { name: 'Design Rules', href: '/design-rules', icon: Palette },
+        { name: 'Documents', href: '/documents', icon: FileText },
         { name: 'All Tasks', href: '/tasks', icon: ListTodo },
       ]
     },
@@ -312,6 +313,7 @@ function getNavigationItems(role) {
       icon: FolderKanban,
       children: [
         { name: 'Projects', href: '/projects', icon: FolderKanban },
+        { name: 'Documents', href: '/documents', icon: FileText },
         { name: 'All Tasks', href: '/tasks', icon: ListTodo },
       ]
     },
@@ -326,11 +328,13 @@ function getNavigationItems(role) {
 
   const staffItems = [
     { name: 'All Tasks', href: '/tasks', icon: ListTodo },
+    { name: 'Documents', href: '/documents', icon: FileText },
     { name: 'My Plans', href: '/hr/plans', icon: Target },
   ];
 
   const freelancerItems = [
     { name: 'My Tasks', href: '/tasks', icon: ListTodo },
+    { name: 'Documents', href: '/documents', icon: FileText },
     { name: 'My Plans', href: '/hr/plans', icon: Target },
   ];
 

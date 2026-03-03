@@ -2,10 +2,14 @@ import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { toast } from 'sonner';
 import plansService from '../../services/plans';
+import { useAuthStore } from '../../stores/authStore';
 
 export default function PlanForm({ plan, onClose, onSuccess }) {
+  const { user } = useAuthStore();
   const [loading, setLoading] = useState(false);
+  const [assignableUsers, setAssignableUsers] = useState([]);
   const [formData, setFormData] = useState({
+    user: '',
     plan_type: 'daily',
     period_start: '',
     period_end: '',
@@ -14,9 +18,12 @@ export default function PlanForm({ plan, onClose, onSuccess }) {
     status: 'draft'
   });
 
+  const canAssignOwner = ['admin', 'manager', 'team_lead', 'staff'].includes(user?.role);
+
   useEffect(() => {
     if (plan) {
       setFormData({
+        user: plan.user || '',
         plan_type: plan.plan_type || 'daily',
         period_start: plan.period_start || '',
         period_end: plan.period_end || '',
@@ -29,10 +36,25 @@ export default function PlanForm({ plan, onClose, onSuccess }) {
       const today = new Date().toISOString().split('T')[0];
       setFormData(prev => ({
         ...prev,
+        user: user?.id || '',
         period_start: today
       }));
     }
-  }, [plan]);
+  }, [plan, user?.id]);
+
+  useEffect(() => {
+    const fetchAssignableUsers = async () => {
+      if (!canAssignOwner) return;
+      try {
+        const data = await plansService.getAssignableUsers();
+        setAssignableUsers(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error('Error fetching assignable users:', error);
+      }
+    };
+
+    fetchAssignableUsers();
+  }, [canAssignOwner]);
 
   // Auto-set period_end based on plan_type
   useEffect(() => {
@@ -89,14 +111,27 @@ export default function PlanForm({ plan, onClose, onSuccess }) {
       toast.error('End date must be after start date');
       return;
     }
+    if (canAssignOwner && !formData.user) {
+      toast.error('Please select a plan owner');
+      return;
+    }
 
     try {
       setLoading(true);
+      const payload = {
+        ...formData,
+        user: canAssignOwner ? Number(formData.user) : undefined
+      };
+
+      if (!canAssignOwner) {
+        delete payload.user;
+      }
+
       if (plan) {
-        await plansService.updatePlan(plan.id, formData);
+        await plansService.updatePlan(plan.id, payload);
         toast.success('Plan updated successfully');
       } else {
-        await plansService.createPlan(formData);
+        await plansService.createPlan(payload);
         toast.success('Plan created successfully');
       }
       await onSuccess();
@@ -126,6 +161,37 @@ export default function PlanForm({ plan, onClose, onSuccess }) {
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Owner */}
+          {canAssignOwner && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Plan Owner *
+              </label>
+              <select
+                name="user"
+                value={formData.user}
+                onChange={handleChange}
+                required
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              >
+                <option value="">Select user</option>
+                {assignableUsers.map(assignableUser => (
+                  <option key={assignableUser.id} value={assignableUser.id}>
+                    {assignableUser.full_name || assignableUser.username}
+                    {assignableUser.department_name ? ` - ${assignableUser.department_name}` : ''}
+                  </option>
+                ))}
+                {assignableUsers.length === 0 && user?.id && (
+                  <option value={user.id}>
+                    {user.first_name || user.last_name
+                      ? `${user.first_name || ''} ${user.last_name || ''}`.trim()
+                      : user.username}
+                  </option>
+                )}
+              </select>
+            </div>
+          )}
+
           {/* Plan Type */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">

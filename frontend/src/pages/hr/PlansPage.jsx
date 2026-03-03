@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Calendar, Plus, Filter, TrendingUp, Target, Clock, CheckCircle2, Eye, Edit, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import plansService from '../../services/plans';
+import api from '../../services/api';
 import PlanForm from '../../components/hr/PlanForm';
 import { PageHeader, StatCard, Button, EmptyState, Table, ViewToggle } from '../../components/ui';
 
@@ -20,6 +21,9 @@ export default function PlansPage() {
   const [filterStatus, setFilterStatus] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState('');
   const [selectedEmployee, setSelectedEmployee] = useState('');
+  const [groupOrder, setGroupOrder] = useState('name');
+  const [listViewMode, setListViewMode] = useState('flat');
+  const [selectedOwnerKey, setSelectedOwnerKey] = useState(null);
 
   // Data for filters
   const [departments, setDepartments] = useState([]);
@@ -63,12 +67,12 @@ export default function PlansPage() {
     try {
       // Fetch departments and employees for filters
       const [deptResponse, empResponse] = await Promise.all([
-        fetch('/api/hr/departments/', { headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` } }),
-        fetch('/api/hr/employees/', { headers: { 'Authorization': `Bearer ${localStorage.getItem('access_token')}` } })
+        api.get('/hr/departments/'),
+        api.get('/hr/employees/')
       ]);
 
-      const depts = await deptResponse.json();
-      const emps = await empResponse.json();
+      const depts = deptResponse.data;
+      const emps = empResponse.data;
 
       setDepartments(Array.isArray(depts) ? depts : depts.results || []);
       setEmployees(Array.isArray(emps) ? emps : emps.results || []);
@@ -104,6 +108,50 @@ export default function PlansPage() {
     if (filterStatus && plan.status !== filterStatus) return false;
     return true;
   });
+
+  const getPlanOwnerName = (plan) => {
+    return (
+      plan.user_name ||
+      plan.user_details?.full_name ||
+      plan.user_details?.username ||
+      plan.employee_name ||
+      'Unassigned'
+    );
+  };
+
+  const groupedPlans = filteredPlans.reduce((groups, plan) => {
+    const ownerName = getPlanOwnerName(plan);
+    const ownerKey = String(plan.user || plan.user_id || ownerName);
+    const ownerEmployee = employees.find(emp => String(emp.user) === String(plan.user || plan.user_id));
+    const departmentName =
+      ownerEmployee?.department_name ||
+      ownerEmployee?.department_details?.name ||
+      'No Department';
+
+    if (!groups[ownerKey]) {
+      groups[ownerKey] = {
+        ownerKey,
+        ownerName,
+        departmentName,
+        plans: []
+      };
+    }
+
+    groups[ownerKey].plans.push(plan);
+    return groups;
+  }, {});
+
+  const groupedPlanEntries = Object.values(groupedPlans).sort((a, b) => {
+    if (groupOrder === 'department') {
+      const byDepartment = a.departmentName.localeCompare(b.departmentName, undefined, { sensitivity: 'base' });
+      if (byDepartment !== 0) return byDepartment;
+      return a.ownerName.localeCompare(b.ownerName, undefined, { sensitivity: 'base' });
+    }
+
+    return a.ownerName.localeCompare(b.ownerName, undefined, { sensitivity: 'base' });
+  });
+
+  const selectedOwnerGroup = groupedPlanEntries.find(group => group.ownerKey === selectedOwnerKey);
 
   // Stats
   const stats = {
@@ -361,6 +409,26 @@ export default function PlansPage() {
                     </option>
                   ))}
                 </select>
+
+                <select
+                  value={groupOrder}
+                  onChange={(e) => setGroupOrder(e.target.value)}
+                  className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all bg-white"
+                >
+                  <option value="name">Group Order: A-Z</option>
+                  <option value="department">Group Order: Department</option>
+                </select>
+
+                {view === 'list' && (
+                  <select
+                    value={listViewMode}
+                    onChange={(e) => setListViewMode(e.target.value)}
+                    className="px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all bg-white"
+                  >
+                    <option value="flat">List Mode: Each Plan Row</option>
+                    <option value="owner">List Mode: Group by Owner</option>
+                  </select>
+                )}
               </>
             )}
 
@@ -389,13 +457,15 @@ export default function PlansPage() {
               <option value="archived">Archived</option>
             </select>
 
-            {(filterType || filterStatus || selectedDepartment || selectedEmployee) && (
+            {(filterType || filterStatus || selectedDepartment || selectedEmployee || groupOrder !== 'name' || listViewMode !== 'flat') && (
               <button
                 onClick={() => {
                   setFilterType('');
                   setFilterStatus('');
                   setSelectedDepartment('');
                   setSelectedEmployee('');
+                  setGroupOrder('name');
+                  setListViewMode('flat');
                 }}
                 className="text-sm text-gray-600 hover:text-gray-900 font-medium"
               >
@@ -424,103 +494,194 @@ export default function PlansPage() {
             }
           />
         ) : view === 'list' ? (
-          <Table columns={columns} data={filteredPlans} />
+          viewMode === 'all' && listViewMode === 'owner' ? (
+            <div className="space-y-6">
+              {groupedPlanEntries.map((group) => (
+                <div
+                  key={group.ownerKey}
+                  className="bg-white/70 backdrop-blur-sm rounded-2xl border border-white/20 shadow-lg p-4"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      {group.ownerName}&apos;s plan{group.departmentName && group.departmentName !== 'No Department' ? ` - ${group.departmentName}` : ''}
+                    </h3>
+                    <span className="text-sm text-gray-500">{group.plans.length} plan(s)</span>
+                  </div>
+                  <Table columns={columns} data={group.plans} />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <Table columns={columns} data={filteredPlans} />
+          )
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredPlans.map(plan => (
-            <div
-              key={plan.id}
-              className="bg-white/80 backdrop-blur-sm rounded-2xl border border-white/20 shadow-lg hover:shadow-xl transition-all duration-200 overflow-hidden"
-            >
-            {/* Plan Type Badge */}
-            <div className={`h-2 ${
-              plan.plan_type === 'daily' ? 'bg-blue-500' :
-              plan.plan_type === 'weekly' ? 'bg-green-500' :
-              plan.plan_type === 'monthly' ? 'bg-purple-500' :
-              'bg-orange-500'
-            }`} />
+          viewMode === 'all' ? (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {groupedPlanEntries.map((group) => {
+                  const activeCount = group.plans.filter(plan => plan.status === 'active').length;
+                  const dailyCount = group.plans.filter(plan => plan.plan_type === 'daily').length;
+                  const avgProgress = group.plans.length > 0
+                    ? Math.round(group.plans.reduce((sum, plan) => sum + plan.completion_percentage, 0) / group.plans.length)
+                    : 0;
 
-            <div className="p-6">
-              {/* Header */}
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex-1">
-                  <h3 className="font-semibold text-lg text-gray-900 mb-1">
-                    {plan.title}
-                  </h3>
-                  {plan.user_name && (
-                    <div className="text-sm text-purple-600 font-medium mb-1">
-                      {plan.user_name}
+                  return (
+                    <div
+                      key={group.ownerKey}
+                      className={`bg-white/80 backdrop-blur-sm rounded-2xl border border-white/20 shadow-lg hover:shadow-xl transition-all duration-200 overflow-hidden cursor-pointer ${
+                        selectedOwnerKey === group.ownerKey ? 'ring-2 ring-purple-500' : ''
+                      }`}
+                      onClick={() => setSelectedOwnerKey(prev => (prev === group.ownerKey ? null : group.ownerKey))}
+                    >
+                      <div className="h-2 bg-gradient-to-r from-indigo-500 to-purple-500" />
+                      <div className="p-6">
+                        <div className="flex items-start justify-between mb-4">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold text-lg text-gray-900 mb-1 truncate">
+                              {group.ownerName}&apos;s plan
+                            </h3>
+                            <div className="text-sm text-gray-600 truncate">
+                              {group.departmentName && group.departmentName !== 'No Department' ? group.departmentName : 'No Department'}
+                            </div>
+                          </div>
+                          <span className="px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+                            {group.plans.length} plan(s)
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-3 text-center">
+                          <div className="rounded-lg bg-blue-50 py-2">
+                            <div className="text-xs text-gray-500">Daily</div>
+                            <div className="text-sm font-semibold text-blue-700">{dailyCount}</div>
+                          </div>
+                          <div className="rounded-lg bg-green-50 py-2">
+                            <div className="text-xs text-gray-500">Active</div>
+                            <div className="text-sm font-semibold text-green-700">{activeCount}</div>
+                          </div>
+                          <div className="rounded-lg bg-purple-50 py-2">
+                            <div className="text-xs text-gray-500">Avg</div>
+                            <div className="text-sm font-semibold text-purple-700">{avgProgress}%</div>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 text-sm text-gray-500">
+                          {selectedOwnerKey === group.ownerKey ? 'Hide plan details' : 'View plan details'}
+                        </div>
+                      </div>
                     </div>
-                  )}
-                  <div className="flex items-center space-x-2 text-sm text-gray-600">
-                    <span className="capitalize">{plan.plan_type_display}</span>
-                    <span>•</span>
-                    <span>
-                      {new Date(plan.period_start).toLocaleDateString()} - {new Date(plan.period_end).toLocaleDateString()}
-                    </span>
+                  );
+                })}
+              </div>
+
+              {selectedOwnerGroup && (
+                <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-white/20 shadow-lg p-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      {selectedOwnerGroup.ownerName}&apos;s plan details
+                    </h3>
+                    <span className="text-sm text-gray-500">{selectedOwnerGroup.plans.length} plan(s)</span>
+                  </div>
+                  <Table columns={columns} data={selectedOwnerGroup.plans} />
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredPlans.map(plan => (
+              <div
+                key={plan.id}
+                className="bg-white/80 backdrop-blur-sm rounded-2xl border border-white/20 shadow-lg hover:shadow-xl transition-all duration-200 overflow-hidden"
+              >
+              {/* Plan Type Badge */}
+              <div className={`h-2 ${
+                plan.plan_type === 'daily' ? 'bg-blue-500' :
+                plan.plan_type === 'weekly' ? 'bg-green-500' :
+                plan.plan_type === 'monthly' ? 'bg-purple-500' :
+                'bg-orange-500'
+              }`} />
+
+              <div className="p-6">
+                {/* Header */}
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-lg text-gray-900 mb-1">
+                      {plan.title}
+                    </h3>
+                    {plan.user_name && (
+                      <div className="text-sm text-purple-600 font-medium mb-1">
+                        {plan.user_name}
+                      </div>
+                    )}
+                    <div className="flex items-center space-x-2 text-sm text-gray-600">
+                      <span className="capitalize">{plan.plan_type_display}</span>
+                      <span>•</span>
+                      <span>
+                        {new Date(plan.period_start).toLocaleDateString()} - {new Date(plan.period_end).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </div>
+
+                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                    plan.status === 'active' ? 'bg-green-100 text-green-800' :
+                    plan.status === 'completed' ? 'bg-purple-100 text-purple-800' :
+                    plan.status === 'draft' ? 'bg-gray-100 text-gray-800' :
+                    'bg-orange-100 text-orange-800'
+                  }`}>
+                    {plan.status_display}
+                  </span>
+                </div>
+
+                {/* Progress Bar */}
+                <div className="mb-4">
+                  <div className="flex items-center justify-between text-sm mb-2">
+                    <span className="text-gray-600">Progress</span>
+                    <span className="font-semibold text-gray-900">{plan.completion_percentage}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-gradient-to-r from-purple-600 to-pink-600 h-2 rounded-full transition-all"
+                      style={{ width: `${plan.completion_percentage}%` }}
+                    />
                   </div>
                 </div>
 
-                <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                  plan.status === 'active' ? 'bg-green-100 text-green-800' :
-                  plan.status === 'completed' ? 'bg-purple-100 text-purple-800' :
-                  plan.status === 'draft' ? 'bg-gray-100 text-gray-800' :
-                  'bg-orange-100 text-orange-800'
-                }`}>
-                  {plan.status_display}
-                </span>
-              </div>
+                {/* Active Period Indicator */}
+                {plan.is_active_period && (
+                  <div className="flex items-center space-x-2 text-sm text-green-600 mb-4">
+                    <Clock className="w-4 h-4" />
+                    <span>Currently active</span>
+                  </div>
+                )}
 
-              {/* Progress Bar */}
-              <div className="mb-4">
-                <div className="flex items-center justify-between text-sm mb-2">
-                  <span className="text-gray-600">Progress</span>
-                  <span className="font-semibold text-gray-900">{plan.completion_percentage}%</span>
+                {/* Actions */}
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    onClick={() => handleEdit(plan)}
+                    className="p-2 hover:bg-blue-100 rounded-lg transition-colors"
+                    title="Edit"
+                  >
+                    <Edit className="h-4 w-4 text-blue-600" />
+                  </button>
+                  <button
+                    onClick={() => handleView(plan)}
+                    className="p-2 hover:bg-indigo-100 rounded-lg transition-colors"
+                    title="View"
+                  >
+                    <Eye className="h-4 w-4 text-indigo-600" />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(plan.id)}
+                    className="p-2 hover:bg-red-100 rounded-lg transition-colors"
+                    title="Delete"
+                  >
+                    <Trash2 className="h-4 w-4 text-red-600" />
+                  </button>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div
-                    className="bg-gradient-to-r from-purple-600 to-pink-600 h-2 rounded-full transition-all"
-                    style={{ width: `${plan.completion_percentage}%` }}
-                  />
-                </div>
-              </div>
-
-              {/* Active Period Indicator */}
-              {plan.is_active_period && (
-                <div className="flex items-center space-x-2 text-sm text-green-600 mb-4">
-                  <Clock className="w-4 h-4" />
-                  <span>Currently active</span>
-                </div>
-              )}
-
-              {/* Actions */}
-              <div className="flex items-center justify-end gap-2">
-                <button
-                  onClick={() => handleEdit(plan)}
-                  className="p-2 hover:bg-blue-100 rounded-lg transition-colors"
-                  title="Edit"
-                >
-                  <Edit className="h-4 w-4 text-blue-600" />
-                </button>
-                <button
-                  onClick={() => handleView(plan)}
-                  className="p-2 hover:bg-indigo-100 rounded-lg transition-colors"
-                  title="View"
-                >
-                  <Eye className="h-4 w-4 text-indigo-600" />
-                </button>
-                <button
-                  onClick={() => handleDelete(plan.id)}
-                  className="p-2 hover:bg-red-100 rounded-lg transition-colors"
-                  title="Delete"
-                >
-                  <Trash2 className="h-4 w-4 text-red-600" />
-                </button>
               </div>
             </div>
-          </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )
         )}
 
         {/* Modals */}
