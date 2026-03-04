@@ -20,6 +20,7 @@ import TaskDetailPage from './pages/TaskDetailPage';
 import UserDetailPage from './pages/UserDetailPage';
 import ProfilePage from './pages/ProfilePage';
 import DocumentsPage from './pages/DocumentsPage';
+import AttendancePage from './pages/AttendancePage';
 
 // HR Pages
 import EmployeesPage from './pages/hr/EmployeesPage';
@@ -91,6 +92,7 @@ function App() {
                     <Route path="/users/:id" element={<UserDetailPage />} />
                     <Route path="/profile" element={<ProfilePage />} />
                     <Route path="/documents" element={<DocumentsPage />} />
+                    <Route path="/attendance" element={<AttendancePage />} />
                     <Route path="/hr/employees" element={<EmployeesPage />} />
                     <Route path="/hr/departments" element={<DepartmentsPage />} />
                     <Route path="/hr/departments/:id" element={<DepartmentDetailPage />} />

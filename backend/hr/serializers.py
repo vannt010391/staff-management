@@ -1,5 +1,9 @@
 from rest_framework import serializers
-from .models import Department, CareerPath, Employee, KPI, Evaluation, SalaryReview, PersonalReport, Plan, PlanGoal, PlanNote, PlanDailyProgress, PlanUpdateHistory
+from .models import (
+    Department, CareerPath, Employee, KPI, Evaluation, SalaryReview,
+    PersonalReport, Plan, PlanGoal, PlanNote, PlanDailyProgress,
+    PlanUpdateHistory, Attendance, AttendanceSettings
+)
 from accounts.serializers import UserSerializer
 
 
@@ -349,3 +353,88 @@ class PlanUpdateHistorySerializer(serializers.ModelSerializer):
             'previous_values', 'current_values', 'change_description'
         ]
         read_only_fields = ['changed_by', 'changed_at']
+
+
+class AttendanceSerializer(serializers.ModelSerializer):
+    """Full serializer for attendance records"""
+    user_details = serializers.SerializerMethodField()
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    has_checked_in = serializers.ReadOnlyField()
+    has_checked_out = serializers.ReadOnlyField()
+    is_currently_working = serializers.ReadOnlyField()
+
+    class Meta:
+        model = Attendance
+        fields = [
+            'id', 'user', 'user_details', 'date', 'check_in_time', 'check_out_time',
+            'status', 'status_display', 'notes', 'check_in_location', 'check_out_location',
+            'total_hours', 'is_late', 'has_checked_in', 'has_checked_out',
+            'is_currently_working', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['user', 'total_hours', 'is_late', 'created_at', 'updated_at']
+
+    def get_user_details(self, obj):
+        return {
+            'id': obj.user.id,
+            'username': obj.user.username,
+            'full_name': obj.user.get_full_name() or obj.user.username,
+            'email': obj.user.email,
+            'role': obj.user.role,
+        }
+
+
+class AttendanceListSerializer(serializers.ModelSerializer):
+    """Simplified serializer for list views"""
+    user_name = serializers.SerializerMethodField()
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+
+    class Meta:
+        model = Attendance
+        fields = [
+            'id', 'user', 'user_name', 'date', 'check_in_time', 'check_out_time',
+            'status', 'status_display', 'total_hours', 'is_late'
+        ]
+
+    def get_user_name(self, obj):
+        return obj.user.get_full_name() or obj.user.username
+
+
+class AttendanceCheckInSerializer(serializers.Serializer):
+    """Serializer for check-in action"""
+    location = serializers.CharField(max_length=200, required=False, allow_blank=True)
+    notes = serializers.CharField(required=False, allow_blank=True)
+    status = serializers.ChoiceField(
+        choices=['present', 'wfh', 'half_day'],
+        default='present'
+    )
+
+
+class AttendanceCheckOutSerializer(serializers.Serializer):
+    """Serializer for check-out action"""
+    location = serializers.CharField(max_length=200, required=False, allow_blank=True)
+    notes = serializers.CharField(required=False, allow_blank=True)
+
+
+class AttendanceStatsSerializer(serializers.Serializer):
+    """Serializer for attendance statistics"""
+    total_days = serializers.IntegerField()
+    present_days = serializers.IntegerField()
+    absent_days = serializers.IntegerField()
+    late_days = serializers.IntegerField()
+    wfh_days = serializers.IntegerField()
+    half_days = serializers.IntegerField()
+    total_hours = serializers.DecimalField(max_digits=6, decimal_places=2)
+    average_hours_per_day = serializers.DecimalField(max_digits=4, decimal_places=2)
+    attendance_rate = serializers.DecimalField(max_digits=5, decimal_places=2)
+
+
+class AttendanceSettingsSerializer(serializers.ModelSerializer):
+    """Serializer for attendance settings"""
+    class Meta:
+        model = AttendanceSettings
+        fields = [
+            'id', 'work_start_time', 'work_end_time', 'late_threshold_minutes',
+            'require_checkout', 'allow_remote_checkin', 'send_reminder_notifications',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at']

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import { ROLES } from '../../constants';
+import AttendanceNotification from '../AttendanceNotification';
 import {
   LayoutDashboard,
   FolderKanban,
@@ -157,6 +158,9 @@ export default function Layout({ children }) {
           </div>
         </div>
 
+        {/* Attendance Notification */}
+        <AttendanceNotification />
+
         {/* Page content */}
         <main className="flex-1">
           {children}
@@ -252,6 +256,7 @@ function SidebarContent({ navigation, currentPath }) {
 function getNavigationItems(role) {
   const commonItems = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+    { name: 'Attendance', href: '/attendance', icon: Clock },
     { name: 'My Profile', href: '/profile', icon: UserCircle },
   ];
 

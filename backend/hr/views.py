@@ -6,7 +6,11 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
 from datetime import datetime
 
-from .models import Department, CareerPath, Employee, KPI, Evaluation, SalaryReview, PersonalReport, Plan, PlanGoal, PlanNote, PlanDailyProgress, PlanUpdateHistory
+from .models import (
+    Department, CareerPath, Employee, KPI, Evaluation, SalaryReview,
+    PersonalReport, Plan, PlanGoal, PlanNote, PlanDailyProgress,
+    PlanUpdateHistory, Attendance, AttendanceSettings
+)
 from .serializers import (
     DepartmentSerializer, CareerPathSerializer,
     EmployeeSerializer, EmployeeListSerializer,
@@ -14,7 +18,9 @@ from .serializers import (
     SalaryReviewSerializer, SalaryReviewListSerializer,
     PersonalReportSerializer, PersonalReportListSerializer,
     PlanSerializer, PlanListSerializer, PlanGoalSerializer, PlanNoteSerializer,
-    PlanDailyProgressSerializer, PlanUpdateHistorySerializer
+    PlanDailyProgressSerializer, PlanUpdateHistorySerializer,
+    AttendanceSerializer, AttendanceListSerializer, AttendanceCheckInSerializer,
+    AttendanceCheckOutSerializer, AttendanceStatsSerializer, AttendanceSettingsSerializer
 )
 from .permissions import (
     IsAdminOrManager, IsAdminOrManagerOrSelf, CanManageHR,
@@ -823,3 +829,289 @@ class PlanUpdateHistoryViewSet(viewsets.ReadOnlyModelViewSet):
             return PlanUpdateHistory.objects.all()
         accessible_plans = Plan.objects.filter(user=user)
         return PlanUpdateHistory.objects.filter(plan__in=accessible_plans)
+
+
+class AttendanceViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Attendance management
+    Users can manage their own attendance
+    Admin/Manager can view all attendances
+    """
+    queryset = Attendance.objects.all()
+    permission_classes = [IsAdminOrManagerOrSelf]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['user', 'date', 'status']
+    ordering_fields = ['date', 'check_in_time']
+    ordering = ['-date', '-check_in_time']
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return AttendanceListSerializer
+        return AttendanceSerializer
+
+    def get_queryset(self):
+        """
+        Admin/Manager: see all attendances
+        Others: see only their own attendance
+        """
+        user = self.request.user
+        if user.role in ['admin', 'manager'] or user.is_superuser:
+            return Attendance.objects.all()
+        return Attendance.objects.filter(user=user)
+
+    @action(detail=False, methods=['post'])
+    def check_in(self, request):
+        """
+        Check in for today
+        Creates or updates attendance record for current user
+        """
+        user = request.user
+        today = timezone.now().date()
+
+        # Check if already checked in today
+        attendance = Attendance.objects.filter(user=user, date=today).first()
+
+        if attendance and attendance.has_checked_in:
+            return Response(
+                {'error': 'You have already checked in today', 'attendance': AttendanceSerializer(attendance).data},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = AttendanceCheckInSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        # Create or update attendance
+        if not attendance:
+            attendance = Attendance.objects.create(
+                user=user,
+                date=today,
+                check_in_time=timezone.now(),
+                check_in_location=serializer.validated_data.get('location', ''),
+                status=serializer.validated_data.get('status', 'present'),
+                notes=serializer.validated_data.get('notes', '')
+            )
+        else:
+            attendance.check_in_time = timezone.now()
+            attendance.check_in_location = serializer.validated_data.get('location', '')
+            attendance.status = serializer.validated_data.get('status', 'present')
+            attendance.notes = serializer.validated_data.get('notes', '')
+            attendance.save()
+
+        return Response(
+            {
+                'message': 'Checked in successfully',
+                'attendance': AttendanceSerializer(attendance).data
+            },
+            status=status.HTTP_200_OK
+        )
+
+    @action(detail=False, methods=['post'])
+    def check_out(self, request):
+        """
+        Check out for today
+        Updates attendance record for current user
+        """
+        user = request.user
+        today = timezone.now().date()
+
+        # Get today's attendance
+        attendance = Attendance.objects.filter(user=user, date=today).first()
+
+        if not attendance or not attendance.has_checked_in:
+            return Response(
+                {'error': 'You must check in first before checking out'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if attendance.has_checked_out:
+            return Response(
+                {'error': 'You have already checked out today', 'attendance': AttendanceSerializer(attendance).data},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = AttendanceCheckOutSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        # Update check-out time
+        attendance.check_out_time = timezone.now()
+        attendance.check_out_location = serializer.validated_data.get('location', '')
+        if serializer.validated_data.get('notes'):
+            attendance.notes += '\n' + serializer.validated_data.get('notes', '')
+        attendance.save()
+
+        return Response(
+            {
+                'message': 'Checked out successfully',
+                'attendance': AttendanceSerializer(attendance).data
+            },
+            status=status.HTTP_200_OK
+        )
+
+    @action(detail=False, methods=['get'])
+    def today(self, request):
+        """
+        Get today's attendance status for current user
+        """
+        user = request.user
+        today = timezone.now().date()
+
+        attendance = Attendance.objects.filter(user=user, date=today).first()
+
+        if not attendance:
+            return Response({
+                'has_checked_in': False,
+                'has_checked_out': False,
+                'attendance': None
+            })
+
+        return Response({
+            'has_checked_in': attendance.has_checked_in,
+            'has_checked_out': attendance.has_checked_out,
+            'attendance': AttendanceSerializer(attendance).data
+        })
+
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """
+        Get attendance statistics for a user within a date range
+        Query params: user_id (optional, admin/manager only), start_date, end_date
+        """
+        user = request.user
+        user_id = request.query_params.get('user_id')
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+
+        # Determine target user
+        if user_id:
+            if user.role not in ['admin', 'manager'] and not user.is_superuser:
+                return Response(
+                    {'error': 'You do not have permission to view other users\' attendance'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            target_user = get_user_model().objects.filter(id=user_id).first()
+            if not target_user:
+                return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            target_user = user
+
+        # Parse dates
+        try:
+            if start_date:
+                start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+            else:
+                # Default to current month
+                start_date = timezone.now().date().replace(day=1)
+
+            if end_date:
+                end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+            else:
+                end_date = timezone.now().date()
+        except ValueError:
+            return Response(
+                {'error': 'Invalid date format. Use YYYY-MM-DD'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Get attendances in date range
+        attendances = Attendance.objects.filter(
+            user=target_user,
+            date__gte=start_date,
+            date__lte=end_date
+        )
+
+        # Calculate statistics
+        total_days = attendances.count()
+        present_days = attendances.filter(status__in=['present', 'late']).count()
+        absent_days = attendances.filter(status='absent').count()
+        late_days = attendances.filter(is_late=True).count()
+        wfh_days = attendances.filter(status='wfh').count()
+        half_days = attendances.filter(status='half_day').count()
+
+        # Calculate total hours
+        total_hours = sum(
+            [att.total_hours for att in attendances if att.total_hours],
+            0
+        )
+
+        # Average hours per day (only counting days with hours logged)
+        days_with_hours = attendances.filter(total_hours__isnull=False).count()
+        average_hours = (total_hours / days_with_hours) if days_with_hours > 0 else 0
+
+        # Attendance rate
+        working_days = (end_date - start_date).days + 1
+        attendance_rate = (present_days / working_days * 100) if working_days > 0 else 0
+
+        stats = {
+            'total_days': total_days,
+            'present_days': present_days,
+            'absent_days': absent_days,
+            'late_days': late_days,
+            'wfh_days': wfh_days,
+            'half_days': half_days,
+            'total_hours': round(total_hours, 2),
+            'average_hours_per_day': round(average_hours, 2),
+            'attendance_rate': round(attendance_rate, 2)
+        }
+
+        serializer = AttendanceStatsSerializer(stats)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def my_history(self, request):
+        """
+        Get attendance history for current user
+        Query params: start_date, end_date, limit
+        """
+        user = request.user
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        limit = request.query_params.get('limit', 30)
+
+        queryset = Attendance.objects.filter(user=user)
+
+        # Apply date filters
+        if start_date:
+            try:
+                start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+                queryset = queryset.filter(date__gte=start_date)
+            except ValueError:
+                pass
+
+        if end_date:
+            try:
+                end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+                queryset = queryset.filter(date__lte=end_date)
+            except ValueError:
+                pass
+
+        # Apply limit
+        try:
+            limit = int(limit)
+            queryset = queryset[:limit]
+        except (ValueError, TypeError):
+            queryset = queryset[:30]
+
+        serializer = AttendanceSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+
+class AttendanceSettingsViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Attendance Settings
+    Only Admin can manage settings
+    Everyone can view settings
+    """
+    queryset = AttendanceSettings.objects.all()
+    serializer_class = AttendanceSettingsSerializer
+    permission_classes = [IsAdminOrManagerOrSelf]
+
+    def get_queryset(self):
+        # Always return the single settings instance
+        return AttendanceSettings.objects.all()
+
+    @action(detail=False, methods=['get'])
+    def current(self, request):
+        """Get current attendance settings"""
+        settings = AttendanceSettings.get_settings()
+        serializer = self.get_serializer(settings)
+        return Response(serializer.data)

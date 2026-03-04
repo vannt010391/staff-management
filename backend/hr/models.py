@@ -750,3 +750,176 @@ class PlanUpdateHistory(models.Model):
     def __str__(self):
         user_name = self.changed_by.username if self.changed_by else 'System'
         return f"{self.plan.title} - {self.action} by {user_name} at {self.changed_at.strftime('%Y-%m-%d %H:%M')}"
+
+
+class Attendance(models.Model):
+    """
+    Attendance tracking - Check-in/Check-out records for all users
+    Users can check in at the start of day and check out at end of day
+    """
+    STATUS_CHOICES = [
+        ('present', 'Present'),
+        ('absent', 'Absent'),
+        ('late', 'Late'),
+        ('half_day', 'Half Day'),
+        ('wfh', 'Work From Home'),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='attendances',
+        help_text='User who checked in'
+    )
+    date = models.DateField(
+        help_text='Date of attendance'
+    )
+
+    # Check-in/Check-out times
+    check_in_time = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Time when user checked in'
+    )
+    check_out_time = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Time when user checked out'
+    )
+
+    # Status and notes
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='present'
+    )
+    notes = models.TextField(
+        blank=True,
+        help_text='Additional notes (e.g., reason for late, WFH details)'
+    )
+
+    # Location tracking (optional)
+    check_in_location = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text='Location when checked in (e.g., Office, Home)'
+    )
+    check_out_location = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text='Location when checked out'
+    )
+
+    # Auto-calculated fields
+    total_hours = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0)],
+        help_text='Total hours worked (auto-calculated)'
+    )
+    is_late = models.BooleanField(
+        default=False,
+        help_text='Marked as late if check-in after configured time'
+    )
+
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-date', '-check_in_time']
+        unique_together = ['user', 'date']
+        indexes = [
+            models.Index(fields=['user', '-date']),
+            models.Index(fields=['date']),
+        ]
+        verbose_name = 'Attendance'
+        verbose_name_plural = 'Attendances'
+
+    def __str__(self):
+        return f"{self.user.username} - {self.date.strftime('%Y-%m-%d')} ({self.get_status_display()})"
+
+    def save(self, *args, **kwargs):
+        """Auto-calculate total hours when check-out is recorded"""
+        if self.check_in_time and self.check_out_time:
+            delta = self.check_out_time - self.check_in_time
+            self.total_hours = round(delta.total_seconds() / 3600, 2)
+
+        # Auto-mark as late if checked in after 9:00 AM (configurable)
+        if self.check_in_time:
+            from datetime import time
+            late_threshold = time(9, 0)  # 9:00 AM
+            if self.check_in_time.time() > late_threshold:
+                self.is_late = True
+                if self.status == 'present':
+                    self.status = 'late'
+
+        super().save(*args, **kwargs)
+
+    @property
+    def has_checked_in(self):
+        """Check if user has checked in today"""
+        return self.check_in_time is not None
+
+    @property
+    def has_checked_out(self):
+        """Check if user has checked out today"""
+        return self.check_out_time is not None
+
+    @property
+    def is_currently_working(self):
+        """Check if user is currently working (checked in but not out)"""
+        return self.has_checked_in and not self.has_checked_out
+
+
+class AttendanceSettings(models.Model):
+    """
+    Global settings for attendance system
+    """
+    # Working hours
+    work_start_time = models.TimeField(
+        default='09:00',
+        help_text='Standard work start time'
+    )
+    work_end_time = models.TimeField(
+        default='18:00',
+        help_text='Standard work end time'
+    )
+    late_threshold_minutes = models.IntegerField(
+        default=15,
+        validators=[MinValueValidator(0)],
+        help_text='Minutes after start time to mark as late'
+    )
+
+    # Settings
+    require_checkout = models.BooleanField(
+        default=True,
+        help_text='Require users to check out at end of day'
+    )
+    allow_remote_checkin = models.BooleanField(
+        default=True,
+        help_text='Allow check-in from remote locations'
+    )
+    send_reminder_notifications = models.BooleanField(
+        default=True,
+        help_text='Send notifications to remind check-in/out'
+    )
+
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Attendance Settings'
+        verbose_name_plural = 'Attendance Settings'
+
+    def __str__(self):
+        return f"Attendance Settings (Work: {self.work_start_time} - {self.work_end_time})"
+
+    @classmethod
+    def get_settings(cls):
+        """Get or create attendance settings"""
+        settings, _ = cls.objects.get_or_create(pk=1)
+        return settings

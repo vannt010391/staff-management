@@ -1,5 +1,9 @@
 from django.contrib import admin
-from .models import Department, CareerPath, Employee, KPI, Evaluation, SalaryReview, PersonalReport, Plan, PlanGoal, PlanNote, PlanDailyProgress, PlanUpdateHistory
+from .models import (
+    Department, CareerPath, Employee, KPI, Evaluation, SalaryReview,
+    PersonalReport, Plan, PlanGoal, PlanNote, PlanDailyProgress,
+    PlanUpdateHistory, Attendance, AttendanceSettings
+)
 
 
 @admin.register(Department)
@@ -171,3 +175,53 @@ class PlanUpdateHistoryAdmin(admin.ModelAdmin):
     search_fields = ['plan__title', 'change_description']
     readonly_fields = ['changed_at']
     date_hierarchy = 'changed_at'
+
+
+@admin.register(Attendance)
+class AttendanceAdmin(admin.ModelAdmin):
+    list_display = ['user', 'date', 'check_in_time', 'check_out_time', 'status', 'total_hours', 'is_late']
+    list_filter = ['status', 'is_late', 'date']
+    search_fields = ['user__username', 'user__first_name', 'user__last_name', 'notes']
+    readonly_fields = ['total_hours', 'is_late', 'created_at', 'updated_at']
+    date_hierarchy = 'date'
+    fieldsets = (
+        ('User & Date', {
+            'fields': ('user', 'date')
+        }),
+        ('Check-in/Check-out', {
+            'fields': ('check_in_time', 'check_in_location', 'check_out_time', 'check_out_location')
+        }),
+        ('Status & Tracking', {
+            'fields': ('status', 'total_hours', 'is_late', 'notes')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        })
+    )
+
+
+@admin.register(AttendanceSettings)
+class AttendanceSettingsAdmin(admin.ModelAdmin):
+    list_display = ['work_start_time', 'work_end_time', 'late_threshold_minutes', 'require_checkout', 'allow_remote_checkin']
+    readonly_fields = ['created_at', 'updated_at']
+    fieldsets = (
+        ('Working Hours', {
+            'fields': ('work_start_time', 'work_end_time', 'late_threshold_minutes')
+        }),
+        ('Settings', {
+            'fields': ('require_checkout', 'allow_remote_checkin', 'send_reminder_notifications')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        })
+    )
+
+    def has_add_permission(self, request):
+        # Only allow one settings instance
+        return not AttendanceSettings.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        # Don't allow deleting settings
+        return False
