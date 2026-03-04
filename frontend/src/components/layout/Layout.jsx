@@ -28,6 +28,7 @@ import {
   Settings,
   UserCircle,
   KeyRound,
+  Clock,
 } from 'lucide-react';
 
 export default function Layout({ children }) {
