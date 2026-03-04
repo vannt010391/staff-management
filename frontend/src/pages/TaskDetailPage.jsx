@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Target, User, Calendar, DollarSign, Clock, Flag } from 'lucide-react';
+import { ArrowLeft, Target, User, Calendar, DollarSign, Clock, Flag, FileText, Upload, Trash2, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import tasksService from '../services/tasks';
 import usersService from '../services/users';
+import taskFilesService from '../services/taskFiles';
 import { formatCurrency, getTaskAssigneeName } from '../utils/helpers';
 import { useAuthStore } from '../stores/authStore';
 import { TASK_STATUS_LABELS } from '../constants';
@@ -24,6 +25,10 @@ export default function TaskDetailPage() {
   const [commentLoading, setCommentLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [uploadFile, setUploadFile] = useState(null);
+  const [uploadFileType, setUploadFileType] = useState('submission');
+  const [uploadComment, setUploadComment] = useState('');
+  const [uploadLoading, setUploadLoading] = useState(false);
 
   const canAssignReviewer = ['admin', 'manager'].includes(user?.role);
   const isReviewerRole = ['admin', 'manager', 'team_lead', 'staff'].includes(user?.role);
@@ -195,6 +200,47 @@ export default function TaskDetailPage() {
     }
   };
 
+  const handleFileUpload = async (e) => {
+    e.preventDefault();
+
+    if (!uploadFile) {
+      toast.error('Please select a file to upload');
+      return;
+    }
+
+    try {
+      setUploadLoading(true);
+      await taskFilesService.uploadFile(id, {
+        file: uploadFile,
+        file_type: uploadFileType,
+        comment: uploadComment,
+      });
+      toast.success('File uploaded successfully');
+      setUploadFile(null);
+      setUploadFileType('submission');
+      setUploadComment('');
+      await fetchTask();
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Failed to upload file');
+    } finally {
+      setUploadLoading(false);
+    }
+  };
+
+  const handleFileDelete = async (fileId) => {
+    if (!window.confirm('Are you sure you want to delete this file?')) {
+      return;
+    }
+
+    try {
+      await taskFilesService.deleteFile(fileId);
+      toast.success('File deleted successfully');
+      await fetchTask();
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Failed to delete file');
+    }
+  };
+
   if (loading) {
     return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600" /></div>;
   }
@@ -210,6 +256,9 @@ export default function TaskDetailPage() {
   const canReview = isReviewerRole && isAssignedReviewer && task.status === 'review_pending';
   const designRules = Array.isArray(task.design_rules) ? task.design_rules : [];
   const comments = Array.isArray(task.comments) ? task.comments : [];
+  const resources = Array.isArray(task.resources) ? task.resources : [];
+  const uploads = Array.isArray(task.uploads) ? task.uploads : [];
+  const canUploadFiles = isAssignedFreelancer || ['admin', 'manager'].includes(user?.role);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
@@ -234,6 +283,101 @@ export default function TaskDetailPage() {
           <Info icon={Calendar} label="Due Date" value={task.due_date ? new Date(task.due_date).toLocaleDateString() : '-'} />
           <Info icon={Calendar} label="Created" value={task.created_at ? new Date(task.created_at).toLocaleString() : '-'} />
           <Info icon={DollarSign} label="Freelancer Earning" value={formatCurrency(Number(task.freelancer_earning || 0))} />
+        </div>
+
+        {/* Task Resources */}
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg">
+          <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+            <FileText className="h-5 w-5" />
+            Tài liệu tham khảo
+          </h3>
+          {resources.length === 0 ? (
+            <p className="text-sm text-gray-500">Chưa có tài liệu tham khảo</p>
+          ) : (
+            <div className="space-y-2">
+              {resources.map((file) => (
+                <FileItem
+                  key={file.id}
+                  file={file}
+                  onDelete={handleFileDelete}
+                  currentUserId={user?.id}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Task Uploads */}
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg">
+          <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+            <Upload className="h-5 w-5" />
+            File bài làm / Kết quả
+          </h3>
+
+          {canUploadFiles && (
+            <form onSubmit={handleFileUpload} className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Chọn file</label>
+                    <input
+                      type="file"
+                      onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Loại file</label>
+                    <select
+                      value={uploadFileType}
+                      onChange={(e) => setUploadFileType(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    >
+                      <option value="submission">Bài làm</option>
+                      <option value="revision">File sửa</option>
+                      <option value="other">Khác</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Ghi chú (tùy chọn)</label>
+                  <textarea
+                    rows={2}
+                    value={uploadComment}
+                    onChange={(e) => setUploadComment(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    placeholder="Thêm ghi chú về file này..."
+                  />
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={uploadLoading}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+                  >
+                    <Upload className="h-4 w-4" />
+                    {uploadLoading ? 'Đang upload...' : 'Upload File'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          )}
+
+          {uploads.length === 0 ? (
+            <p className="text-sm text-gray-500">Chưa có file bài làm</p>
+          ) : (
+            <div className="space-y-2">
+              {uploads.map((file) => (
+                <FileItem
+                  key={file.id}
+                  file={file}
+                  onDelete={handleFileDelete}
+                  currentUserId={user?.id}
+                />
+              ))}
+            </div>
+          )}
         </div>
 
         {canAssignReviewer && (
@@ -440,6 +584,55 @@ function Info({ icon: Icon, label, value }) {
       <div>
         <p className="text-sm text-gray-600">{label}</p>
         <p className="font-medium text-gray-900">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function FileItem({ file, onDelete, currentUserId }) {
+  const canDelete = currentUserId === file.uploaded_by;
+  const formatFileSize = (bytes) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+  };
+
+  return (
+    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100">
+      <div className="flex items-center gap-3 flex-1 min-w-0">
+        <FileText className="h-5 w-5 text-blue-600 flex-shrink-0" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-gray-900 truncate">{file.filename}</p>
+          <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
+            <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded">{file.file_type_display}</span>
+            <span>{formatFileSize(file.file_size)}</span>
+            <span>Bởi {file.uploaded_by_full_name || file.uploaded_by_username}</span>
+            <span>{new Date(file.uploaded_at).toLocaleString()}</span>
+          </div>
+          {file.comment && (
+            <p className="text-xs text-gray-600 mt-1 italic">{file.comment}</p>
+          )}
+        </div>
+      </div>
+      <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+        <a
+          href={file.file_url}
+          target="_blank"
+          rel="noreferrer"
+          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
+          title="Download"
+        >
+          <Download className="h-4 w-4" />
+        </a>
+        {canDelete && (
+          <button
+            onClick={() => onDelete(file.id)}
+            className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+            title="Delete"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
       </div>
     </div>
   );
