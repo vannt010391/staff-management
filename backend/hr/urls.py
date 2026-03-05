@@ -5,7 +5,8 @@ from .views import (
     KPIViewSet, EvaluationViewSet, SalaryReviewViewSet, PersonalReportViewSet,
     PlanViewSet, PlanGoalViewSet, PlanNoteViewSet,
     PlanDailyProgressViewSet, PlanUpdateHistoryViewSet,
-    AttendanceViewSet, AttendanceSettingsViewSet
+    AttendanceViewSet, AttendanceSettingsViewSet,
+    LeaveTypeViewSet, LeaveBalanceViewSet, LeaveRequestViewSet
 )
 
 router = DefaultRouter()
@@ -23,6 +24,9 @@ router.register(r'plan-daily-progress', PlanDailyProgressViewSet, basename='plan
 router.register(r'plan-update-history', PlanUpdateHistoryViewSet, basename='plan-update-history')
 router.register(r'attendances', AttendanceViewSet, basename='attendance')
 router.register(r'attendance-settings', AttendanceSettingsViewSet, basename='attendance-settings')
+router.register(r'leave-types', LeaveTypeViewSet, basename='leave-type')
+router.register(r'leave-balances', LeaveBalanceViewSet, basename='leave-balance')
+router.register(r'leave-requests', LeaveRequestViewSet, basename='leave-request')
 
 urlpatterns = [
     path('', include(router.urls)),

@@ -36,6 +36,10 @@ import DepartmentDetailPage from './pages/hr/DepartmentDetailPage';
 import CareerPathDetailPage from './pages/hr/CareerPathDetailPage';
 import PersonalReportDetailPage from './pages/hr/PersonalReportDetailPage';
 import PlanDetailPage from './pages/hr/PlanDetailPage';
+import AttendanceManagementPage from './pages/hr/AttendanceManagementPage';
+import LeaveRequestsPage from './pages/hr/LeaveRequestsPage';
+import LeaveManagementPage from './pages/hr/LeaveManagementPage';
+import LeaveTypesPage from './pages/hr/LeaveTypesPage';
 
 // CRM Pages
 import CRMDashboardPage from './pages/crm/CRMDashboardPage';
@@ -93,6 +97,7 @@ function App() {
                     <Route path="/profile" element={<ProfilePage />} />
                     <Route path="/documents" element={<DocumentsPage />} />
                     <Route path="/attendance" element={<AttendancePage />} />
+                    <Route path="/hr/attendance-management" element={<AttendanceManagementPage />} />
                     <Route path="/hr/employees" element={<EmployeesPage />} />
                     <Route path="/hr/departments" element={<DepartmentsPage />} />
                     <Route path="/hr/departments/:id" element={<DepartmentDetailPage />} />
@@ -106,6 +111,9 @@ function App() {
                     <Route path="/hr/reports/:id" element={<PersonalReportDetailPage />} />
                     <Route path="/hr/plans" element={<PlansPage />} />
                     <Route path="/hr/plans/:id" element={<PlanDetailPage />} />
+                    <Route path="/hr/leave-requests" element={<LeaveRequestsPage />} />
+                    <Route path="/hr/leave-management" element={<LeaveManagementPage />} />
+                    <Route path="/hr/leave-types" element={<LeaveTypesPage />} />
 
                     {/* CRM Routes */}
                     <Route path="/crm" element={<CRMDashboardPage />} />

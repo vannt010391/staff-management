@@ -2,7 +2,8 @@ from rest_framework import serializers
 from .models import (
     Department, CareerPath, Employee, KPI, Evaluation, SalaryReview,
     PersonalReport, Plan, PlanGoal, PlanNote, PlanDailyProgress,
-    PlanUpdateHistory, Attendance, AttendanceSettings
+    PlanUpdateHistory, Attendance, AttendanceSettings,
+    LeaveType, LeaveBalance, LeaveRequest
 )
 from accounts.serializers import UserSerializer
 
@@ -368,6 +369,15 @@ class AttendanceSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'user', 'user_details', 'date', 'check_in_time', 'check_out_time',
             'status', 'status_display', 'notes', 'check_in_location', 'check_out_location',
+            # Check-in metadata
+            'check_in_latitude', 'check_in_longitude', 'check_in_accuracy', 'check_in_ip',
+            'check_in_device_type', 'check_in_device_os', 'check_in_device_browser',
+            'check_in_user_agent', 'check_in_address',
+            # Check-out metadata
+            'check_out_latitude', 'check_out_longitude', 'check_out_accuracy', 'check_out_ip',
+            'check_out_device_type', 'check_out_device_os', 'check_out_device_browser',
+            'check_out_user_agent', 'check_out_address',
+            # Computed fields
             'total_hours', 'is_late', 'has_checked_in', 'has_checked_out',
             'is_currently_working', 'created_at', 'updated_at'
         ]
@@ -400,19 +410,39 @@ class AttendanceListSerializer(serializers.ModelSerializer):
 
 
 class AttendanceCheckInSerializer(serializers.Serializer):
-    """Serializer for check-in action"""
+    """Serializer for check-in action with metadata"""
     location = serializers.CharField(max_length=200, required=False, allow_blank=True)
     notes = serializers.CharField(required=False, allow_blank=True)
     status = serializers.ChoiceField(
         choices=['present', 'wfh', 'half_day'],
         default='present'
     )
+    # Geolocation metadata
+    latitude = serializers.DecimalField(max_digits=9, decimal_places=6, required=False, allow_null=True)
+    longitude = serializers.DecimalField(max_digits=9, decimal_places=6, required=False, allow_null=True)
+    accuracy = serializers.FloatField(required=False, allow_null=True)
+    address = serializers.CharField(max_length=500, required=False, allow_blank=True)
+    # Device metadata
+    device_type = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    device_os = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    device_browser = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    user_agent = serializers.CharField(required=False, allow_blank=True)
 
 
 class AttendanceCheckOutSerializer(serializers.Serializer):
-    """Serializer for check-out action"""
+    """Serializer for check-out action with metadata"""
     location = serializers.CharField(max_length=200, required=False, allow_blank=True)
     notes = serializers.CharField(required=False, allow_blank=True)
+    # Geolocation metadata
+    latitude = serializers.DecimalField(max_digits=9, decimal_places=6, required=False, allow_null=True)
+    longitude = serializers.DecimalField(max_digits=9, decimal_places=6, required=False, allow_null=True)
+    accuracy = serializers.FloatField(required=False, allow_null=True)
+    address = serializers.CharField(max_length=500, required=False, allow_blank=True)
+    # Device metadata
+    device_type = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    device_os = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    device_browser = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    user_agent = serializers.CharField(required=False, allow_blank=True)
 
 
 class AttendanceStatsSerializer(serializers.Serializer):
@@ -438,3 +468,101 @@ class AttendanceSettingsSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at'
         ]
         read_only_fields = ['created_at', 'updated_at']
+
+
+# ===== Leave Management Serializers =====
+
+class LeaveTypeSerializer(serializers.ModelSerializer):
+    """Serializer for LeaveType"""
+    class Meta:
+        model = LeaveType
+        fields = [
+            'id', 'name', 'code', 'default_days_per_year',
+            'requires_approval', 'is_paid', 'description', 'is_active',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+
+
+class LeaveBalanceSerializer(serializers.ModelSerializer):
+    """Serializer for LeaveBalance"""
+    user_details = serializers.SerializerMethodField()
+    leave_type_details = serializers.SerializerMethodField()
+    remaining_days = serializers.ReadOnlyField()
+
+    class Meta:
+        model = LeaveBalance
+        fields = [
+            'id', 'user', 'user_details', 'leave_type', 'leave_type_details',
+            'year', 'total_days', 'used_days', 'remaining_days',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+
+    def get_user_details(self, obj):
+        return {
+            'id': obj.user.id,
+            'username': obj.user.username,
+            'full_name': obj.user.get_full_name() or obj.user.username
+        }
+
+    def get_leave_type_details(self, obj):
+        return {
+            'id': obj.leave_type.id,
+            'name': obj.leave_type.name,
+            'code': obj.leave_type.code
+        }
+
+
+class LeaveRequestSerializer(serializers.ModelSerializer):
+    """Full serializer for LeaveRequest"""
+    user_details = serializers.SerializerMethodField()
+    leave_type_details = serializers.SerializerMethodField()
+    approver_details = serializers.SerializerMethodField()
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+
+    class Meta:
+        model = LeaveRequest
+        fields = [
+            'id', 'user', 'user_details', 'leave_type', 'leave_type_details',
+            'start_date', 'end_date', 'days_count', 'reason',
+            'status', 'status_display', 'approver', 'approver_details',
+            'approved_at', 'rejection_reason', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['user', 'approver', 'approved_at', 'created_at', 'updated_at']
+
+    def get_user_details(self, obj):
+        return {
+            'id': obj.user.id,
+            'username': obj.user.username,
+            'full_name': obj.user.get_full_name() or obj.user.username
+        }
+
+    def get_leave_type_details(self, obj):
+        return {
+            'id': obj.leave_type.id,
+            'name': obj.leave_type.name,
+            'code': obj.leave_type.code
+        }
+
+    def get_approver_details(self, obj):
+        if not obj.approver:
+            return None
+        return {
+            'id': obj.approver.id,
+            'username': obj.approver.username,
+            'full_name': obj.approver.get_full_name() or obj.approver.username
+        }
+
+
+class LeaveRequestCreateSerializer(serializers.Serializer):
+    """Serializer for creating leave requests"""
+    leave_type = serializers.IntegerField()
+    start_date = serializers.DateField()
+    end_date = serializers.DateField()
+    reason = serializers.CharField()
+
+    def validate(self, data):
+        if data['start_date'] > data['end_date']:
+            raise serializers.ValidationError("Start date must be before end date")
+        return data

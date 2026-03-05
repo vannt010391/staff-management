@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { X, FolderKanban, Save, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import projectsService from '../../services/projects';

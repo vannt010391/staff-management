@@ -14,12 +14,12 @@ export default function AttendanceNotification() {
   const [modalType, setModalType] = useState('check-in');
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    checkTodayStatus();
-    // Check every 30 minutes
-    const interval = setInterval(checkTodayStatus, 30 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, []);
+  const isEndOfDay = () => {
+    const now = new Date();
+    const hours = now.getHours();
+    // Show check-out reminder after 5 PM
+    return hours >= 17;
+  };
 
   const checkTodayStatus = async () => {
     try {
@@ -32,17 +32,25 @@ export default function AttendanceNotification() {
         setDismissed(false);
       }
     } catch (error) {
-      console.error('Failed to check attendance status:', error);
+      // Silently fail if user doesn't have permission or isn't an employee yet
+      // This prevents blocking the UI when attendance feature is not available
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        console.debug('Attendance notification not available for this user');
+      } else {
+        console.error('Failed to check attendance status:', error);
+      }
       setLoading(false);
+      setTodayStatus(null); // Ensure component hides on error
     }
   };
 
-  const isEndOfDay = () => {
-    const now = new Date();
-    const hours = now.getHours();
-    // Show check-out reminder after 5 PM
-    return hours >= 17;
-  };
+  useEffect(() => {
+    checkTodayStatus();
+    // Check every 30 minutes
+    const interval = setInterval(checkTodayStatus, 30 * 60 * 1000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleCheckIn = () => {
     setModalType('check-in');

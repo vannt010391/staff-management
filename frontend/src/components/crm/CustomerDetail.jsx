@@ -82,7 +82,7 @@ export default function CustomerDetail({ customerId, onClose, onUpdate }) {
   ];
 
   const expenses = timeline.filter(item => item.type === 'expense').map(item => item.data);
-  const interactions = timeline.filter(item => item.type === 'interaction').map(item => item.data);
+  const _interactions = timeline.filter(item => item.type === 'interaction').map(item => item.data);
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">

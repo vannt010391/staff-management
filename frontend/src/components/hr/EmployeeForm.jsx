@@ -47,9 +47,16 @@ export default function EmployeeForm({ employee = null, onClose, onSuccess }) {
       });
       // Handle paginated response from DRF
       const allUsers = response.data.results || (Array.isArray(response.data) ? response.data : []);
+      console.log('All users fetched:', allUsers.length);
       // Filter only internal team roles
       const internalUsers = allUsers.filter(u => ['admin', 'manager', 'team_lead', 'staff'].includes(u.role));
+      console.log('Internal users (admin/manager/team_lead/staff):', internalUsers.length);
+      console.log('Internal users:', internalUsers);
       setUsers(internalUsers);
+
+      if (internalUsers.length === 0) {
+        toast.warning('No available users found. Please create user accounts first.');
+      }
     } catch (error) {
       console.error('Error fetching users:', error);
       toast.error('Failed to load users');
@@ -127,6 +134,32 @@ export default function EmployeeForm({ employee = null, onClose, onSuccess }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    console.log('Form submitted with data:', formData);
+
+    // Validate required fields with trimming
+    const userValue = formData.user?.toString().trim();
+    if (!userValue || userValue === '' || userValue === 'null' || userValue === 'undefined') {
+      toast.error('Please select a user account');
+      return;
+    }
+    if (!formData.employee_id?.trim()) {
+      toast.error('Employee ID is required');
+      return;
+    }
+    if (!formData.position?.trim()) {
+      toast.error('Position is required');
+      return;
+    }
+    if (!formData.join_date) {
+      toast.error('Join date is required');
+      return;
+    }
+    if (!formData.current_salary || formData.current_salary <= 0) {
+      toast.error('Current salary is required and must be greater than 0');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -137,30 +170,41 @@ export default function EmployeeForm({ employee = null, onClose, onSuccess }) {
 
       const method = employee ? 'put' : 'post';
 
-      // Convert empty strings to null for optional FK fields
+      // Convert empty strings to null for optional FK fields, ensure required fields are set
       const submitData = {
         ...formData,
+        user: parseInt(formData.user) || (employee ? employee.user : null), // Ensure user is a number
+        employee_id: formData.employee_id.trim(),
+        position: formData.position.trim(),
         department: formData.department || null,
         career_level: formData.career_level || null,
         date_of_birth: formData.date_of_birth || null,
+        current_salary: parseFloat(formData.current_salary) || 0,
       };
 
-      // Ensure user field has a value (required by backend)
-      if (!submitData.user && employee) {
-        // If user is empty but we're editing, keep the original user
-        submitData.user = employee.user;
+      // Final check: ensure user field has a valid value
+      if (!submitData.user) {
+        toast.error('User account is required. Please select a valid user.');
+        setLoading(false);
+        return;
       }
 
-      await axios[method](url, submitData, {
+      console.log('Submitting data:', submitData);
+      console.log('URL:', url);
+      console.log('Method:', method);
+
+      const response = await axios[method](url, submitData, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
+      console.log('Employee saved successfully:', response.data);
       toast.success(`Employee ${employee ? 'updated' : 'created'} successfully`);
       await onSuccess();
       onClose();
     } catch (error) {
       console.error('Error saving employee:', error);
       console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
 
       // Handle validation errors
       if (error.response?.data) {
@@ -176,6 +220,8 @@ export default function EmployeeForm({ employee = null, onClose, onSuccess }) {
           const errorMsg = errors.detail || errors.message || 'Failed to save employee';
           toast.error(errorMsg);
         }
+      } else if (error.message) {
+        toast.error(`Network error: ${error.message}`);
       } else {
         toast.error('Failed to save employee');
       }
@@ -463,17 +509,14 @@ export default function EmployeeForm({ employee = null, onClose, onSuccess }) {
             form="employee-form"
             disabled={loading}
             className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={(e) => {
-              e.preventDefault();
-              document.getElementById('employee-form').requestSubmit();
-            }}
           >
             {loading ? 'Saving...' : employee ? 'Update Employee' : 'Create Employee'}
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+            disabled={loading}
+            className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Cancel
           </button>

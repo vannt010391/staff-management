@@ -102,6 +102,15 @@ class Employee(models.Model):
         null=True,
         related_name='employees'
     )
+    manager = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='managed_employees',
+        limit_choices_to={'role__in': ['admin', 'manager', 'team_lead']},
+        help_text='Direct manager or team lead'
+    )
     career_level = models.ForeignKey(
         CareerPath,
         on_delete=models.SET_NULL,
@@ -810,6 +819,106 @@ class Attendance(models.Model):
         help_text='Location when checked out'
     )
 
+    # Check-in metadata (geolocation, IP, device info)
+    check_in_latitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        help_text='GPS latitude at check-in'
+    )
+    check_in_longitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        help_text='GPS longitude at check-in'
+    )
+    check_in_accuracy = models.FloatField(
+        null=True,
+        blank=True,
+        help_text='GPS accuracy in meters at check-in'
+    )
+    check_in_ip = models.GenericIPAddressField(
+        null=True,
+        blank=True,
+        help_text='IP address at check-in'
+    )
+    check_in_device_type = models.CharField(
+        max_length=20,
+        blank=True,
+        help_text='Device type: Desktop, Mobile, Tablet'
+    )
+    check_in_device_os = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text='Operating system (e.g., Windows, macOS, Android)'
+    )
+    check_in_device_browser = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text='Browser (e.g., Chrome, Firefox, Safari)'
+    )
+    check_in_user_agent = models.TextField(
+        blank=True,
+        help_text='Full user agent string'
+    )
+    check_in_address = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text='Reverse geocoded address at check-in'
+    )
+
+    # Check-out metadata (geolocation, IP, device info)
+    check_out_latitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        help_text='GPS latitude at check-out'
+    )
+    check_out_longitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        help_text='GPS longitude at check-out'
+    )
+    check_out_accuracy = models.FloatField(
+        null=True,
+        blank=True,
+        help_text='GPS accuracy in meters at check-out'
+    )
+    check_out_ip = models.GenericIPAddressField(
+        null=True,
+        blank=True,
+        help_text='IP address at check-out'
+    )
+    check_out_device_type = models.CharField(
+        max_length=20,
+        blank=True,
+        help_text='Device type: Desktop, Mobile, Tablet'
+    )
+    check_out_device_os = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text='Operating system (e.g., Windows, macOS, Android)'
+    )
+    check_out_device_browser = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text='Browser (e.g., Chrome, Firefox, Safari)'
+    )
+    check_out_user_agent = models.TextField(
+        blank=True,
+        help_text='Full user agent string'
+    )
+    check_out_address = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text='Reverse geocoded address at check-out'
+    )
+
     # Auto-calculated fields
     total_hours = models.DecimalField(
         max_digits=4,
@@ -923,3 +1032,171 @@ class AttendanceSettings(models.Model):
         """Get or create attendance settings"""
         settings, _ = cls.objects.get_or_create(pk=1)
         return settings
+
+
+class LeaveType(models.Model):
+    """
+    Types of leave available (annual, sick, unpaid, etc.)
+    """
+    name = models.CharField(max_length=100, unique=True, help_text='Leave type name')
+    code = models.CharField(max_length=20, unique=True, help_text='Unique code')
+    default_days_per_year = models.IntegerField(default=0, help_text='Default days allocated per year')
+    requires_approval = models.BooleanField(default=True, help_text='Requires manager approval')
+    is_paid = models.BooleanField(default=True, help_text='Is this a paid leave')
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = 'Leave Type'
+        verbose_name_plural = 'Leave Types'
+
+    def __str__(self):
+        return self.name
+
+
+class LeaveBalance(models.Model):
+    """
+    Track leave balance for each user per leave type per year
+    """
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='leave_balances'
+    )
+    leave_type = models.ForeignKey(LeaveType, on_delete=models.CASCADE, related_name='balances')
+    year = models.IntegerField(help_text='Year for this balance')
+    total_days = models.DecimalField(
+        max_digits=5,
+        decimal_places=1,
+        default=0,
+        validators=[MinValueValidator(0)],
+        help_text='Total days allocated'
+    )
+    used_days = models.DecimalField(
+        max_digits=5,
+        decimal_places=1,
+        default=0,
+        validators=[MinValueValidator(0)],
+        help_text='Days already used'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ['user', 'leave_type', 'year']
+        ordering = ['-year', 'leave_type']
+        verbose_name = 'Leave Balance'
+        verbose_name_plural = 'Leave Balances'
+
+    def __str__(self):
+        return f"{self.user.username} - {self.leave_type.name} ({self.year})"
+
+    @property
+    def remaining_days(self):
+        """Calculate remaining days"""
+        return max(0, self.total_days - self.used_days)
+
+
+class LeaveRequest(models.Model):
+    """
+    Leave requests submitted by employees
+    """
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='leave_requests'
+    )
+    leave_type = models.ForeignKey(LeaveType, on_delete=models.PROTECT, related_name='requests')
+    start_date = models.DateField()
+    end_date = models.DateField()
+    days_count = models.DecimalField(
+        max_digits=5,
+        decimal_places=1,
+        validators=[MinValueValidator(0.5)],
+        help_text='Number of leave days (can be 0.5 for half day)'
+    )
+    reason = models.TextField(help_text='Reason for leave')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+
+    # Approval workflow
+    approver = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='approved_leave_requests'
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    rejection_reason = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Leave Request'
+        verbose_name_plural = 'Leave Requests'
+
+    def __str__(self):
+        return f"{self.user.username} - {self.leave_type.name} ({self.start_date} to {self.end_date})"
+
+    def save(self, *args, **kwargs):
+        """Auto-calculate days_count if not provided"""
+        if not self.days_count:
+            self.days_count = self._calculate_business_days()
+        super().save(*args, **kwargs)
+
+        # If approved, create attendance records and update balance
+        if self.status == 'approved' and self.approver:
+            self._create_attendance_records()
+            self._update_leave_balance()
+
+    def _calculate_business_days(self):
+        """Calculate business days between start and end date (excluding weekends)"""
+        from datetime import timedelta
+        current = self.start_date
+        days = 0
+        while current <= self.end_date:
+            if current.weekday() < 5:  # Monday = 0, Sunday = 6
+                days += 1
+            current += timedelta(days=1)
+        return days
+
+    def _create_attendance_records(self):
+        """Create attendance records for approved leave days"""
+        from datetime import timedelta
+        current = self.start_date
+        while current <= self.end_date:
+            if current.weekday() < 5:  # Only weekdays
+                Attendance.objects.update_or_create(
+                    user=self.user,
+                    date=current,
+                    defaults={
+                        'status': 'wfh' if self.leave_type.code == 'wfh' else 'absent',
+                        'notes': f"Leave: {self.leave_type.name} - {self.reason}",
+                        'check_in_location': 'On Leave',
+                        'check_out_location': 'On Leave'
+                    }
+                )
+            current += timedelta(days=1)
+
+    def _update_leave_balance(self):
+        """Deduct from leave balance"""
+        balance, _ = LeaveBalance.objects.get_or_create(
+            user=self.user,
+            leave_type=self.leave_type,
+            year=self.start_date.year,
+            defaults={'total_days': self.leave_type.default_days_per_year}
+        )
+        balance.used_days += self.days_count
+        balance.save()

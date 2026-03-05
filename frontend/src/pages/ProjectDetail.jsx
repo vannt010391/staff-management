@@ -169,7 +169,7 @@ export default function ProjectDetail() {
     }
   };
 
-  const getStatusColor = (status) => {
+  const _getStatusColor = (status) => {
     const colors = {
       planning: 'bg-gray-100 text-gray-800',
       active: 'bg-blue-100 text-blue-800',

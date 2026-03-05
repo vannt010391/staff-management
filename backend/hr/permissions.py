@@ -103,3 +103,81 @@ class CanReviewReport(permissions.BasePermission):
             return obj.employee.user == request.user
 
         return False
+
+
+class CanManageTeamAttendance(permissions.BasePermission):
+    """
+    Permission: Admin/Manager/Team Lead can view team attendance
+    - Admin: can view all attendance
+    - Manager: can view department attendance
+    - Team Lead: can view direct reports attendance (based on manager field)
+    - Employee: can view only their own attendance
+    """
+    def has_permission(self, request, view):
+        return request.user and request.user.is_authenticated
+
+    def has_object_permission(self, request, view, obj):
+        # Admin can access all
+        if request.user.role == 'admin' or request.user.is_superuser:
+            return True
+
+        # Manager can access department attendance
+        if request.user.role == 'manager':
+            try:
+                employee = obj.user.employee_profile
+                if employee.department:
+                    return employee.department.manager == request.user
+            except:
+                pass
+            return True  # If no employee profile, allow manager
+
+        # Team Lead can access direct reports
+        if request.user.role == 'team_lead':
+            try:
+                employee = obj.user.employee_profile
+                return employee.manager == request.user
+            except:
+                pass
+
+        # Employee can only access their own
+        return obj.user == request.user
+
+
+class CanManageLeaveRequests(permissions.BasePermission):
+    """
+    Permission: Admin/Manager/Team Lead can approve/reject leave requests
+    """
+    def has_permission(self, request, view):
+        if request.method in permissions.SAFE_METHODS:
+            return request.user and request.user.is_authenticated
+
+        # Only admin/manager/team_lead can approve/reject
+        if view.action in ['process_request']:
+            return request.user.role in ['admin', 'manager', 'team_lead']
+
+        return request.user and request.user.is_authenticated
+
+    def has_object_permission(self, request, view, obj):
+        # Admin can manage all
+        if request.user.role == 'admin' or request.user.is_superuser:
+            return True
+
+        # Manager can manage department requests
+        if request.user.role == 'manager':
+            try:
+                employee = obj.user.employee_profile
+                if employee.department:
+                    return employee.department.manager == request.user
+            except:
+                pass
+
+        # Team Lead can manage direct reports
+        if request.user.role == 'team_lead':
+            try:
+                employee = obj.user.employee_profile
+                return employee.manager == request.user
+            except:
+                pass
+
+        # User can view own requests
+        return obj.user == request.user

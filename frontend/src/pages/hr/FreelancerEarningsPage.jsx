@@ -38,7 +38,7 @@ export default function FreelancerEarningsPage() {
               approvedOrCompletedTasks: Number(summary.approved_or_completed_tasks || 0),
               totalTasks: Number(summary.total_tasks || 0),
             };
-          } catch (error) {
+          } catch (_error) {
             return {
               id: freelancer.id,
               username: freelancer.username,

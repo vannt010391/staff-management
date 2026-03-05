@@ -3,7 +3,7 @@ import { X, Plus, CheckCircle2, Circle, Trash2, MessageSquare, Calendar, Pencil,
 import { toast } from 'sonner';
 import plansService from '../../services/plans';
 
-export default function PlanDetail({ planId, onClose, onUpdate }) {
+export default function PlanDetail({ planId, onClose }) {
   const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(true);
   const [newGoal, setNewGoal] = useState({ title: '', description: '', priority: 'medium' });

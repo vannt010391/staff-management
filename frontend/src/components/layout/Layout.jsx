@@ -29,6 +29,7 @@ import {
   UserCircle,
   KeyRound,
   Clock,
+  Calendar,
 } from 'lucide-react';
 
 export default function Layout({ children }) {
@@ -258,6 +259,7 @@ function getNavigationItems(role) {
   const commonItems = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
     { name: 'Attendance', href: '/attendance', icon: Clock },
+    { name: 'My Leave', href: '/hr/leave-requests', icon: Calendar },
     { name: 'My Profile', href: '/profile', icon: UserCircle },
   ];
 
@@ -296,6 +298,9 @@ function getNavigationItems(role) {
       name: 'HR',
       icon: UserCog,
       children: [
+        { name: 'Attendance Management', href: '/hr/attendance-management', icon: Clock },
+        { name: 'Leave Management', href: '/hr/leave-management', icon: Calendar },
+        { name: 'Leave Types', href: '/hr/leave-types', icon: Settings },
         { name: 'Career Paths', href: '/hr/career-paths', icon: TrendingUp },
         { name: 'KPI Dashboard', href: '/hr/kpi', icon: TrendingUp },
         { name: 'Evaluations', href: '/hr/evaluations', icon: Award },
@@ -327,6 +332,7 @@ function getNavigationItems(role) {
       name: 'Team Management',
       icon: UsersRound,
       children: [
+        { name: 'Leave Management', href: '/hr/leave-management', icon: Calendar },
         { name: 'My Plans', href: '/hr/plans', icon: Target },
       ]
     },

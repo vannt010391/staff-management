@@ -63,7 +63,7 @@ export default function ProfilePage() {
         bank_branch: user.bank_branch || '',
       }));
       setCurrentQr(user.bank_qr_code || '');
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to load profile');
     } finally {
       setLoading(false);

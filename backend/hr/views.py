@@ -9,7 +9,8 @@ from datetime import datetime
 from .models import (
     Department, CareerPath, Employee, KPI, Evaluation, SalaryReview,
     PersonalReport, Plan, PlanGoal, PlanNote, PlanDailyProgress,
-    PlanUpdateHistory, Attendance, AttendanceSettings
+    PlanUpdateHistory, Attendance, AttendanceSettings,
+    LeaveType, LeaveBalance, LeaveRequest
 )
 from .serializers import (
     DepartmentSerializer, CareerPathSerializer,
@@ -20,11 +21,13 @@ from .serializers import (
     PlanSerializer, PlanListSerializer, PlanGoalSerializer, PlanNoteSerializer,
     PlanDailyProgressSerializer, PlanUpdateHistorySerializer,
     AttendanceSerializer, AttendanceListSerializer, AttendanceCheckInSerializer,
-    AttendanceCheckOutSerializer, AttendanceStatsSerializer, AttendanceSettingsSerializer
+    AttendanceCheckOutSerializer, AttendanceStatsSerializer, AttendanceSettingsSerializer,
+    LeaveTypeSerializer, LeaveBalanceSerializer, LeaveRequestSerializer, LeaveRequestCreateSerializer
 )
 from .permissions import (
     IsAdminOrManager, IsAdminOrManagerOrSelf, CanManageHR,
-    CanApproveSalaryReview, CanReviewReport
+    CanApproveSalaryReview, CanReviewReport, CanManageTeamAttendance,
+    CanManageLeaveRequests
 )
 from .services import build_daily_progress_snapshot
 
@@ -844,6 +847,15 @@ class AttendanceViewSet(viewsets.ModelViewSet):
     ordering_fields = ['date', 'check_in_time']
     ordering = ['-date', '-check_in_time']
 
+    def get_client_ip(self, request):
+        """Get real client IP address from request headers"""
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            ip = x_forwarded_for.split(',')[0].strip()
+        else:
+            ip = request.META.get('REMOTE_ADDR')
+        return ip
+
     def get_serializer_class(self):
         if self.action == 'list':
             return AttendanceListSerializer
@@ -880,21 +892,36 @@ class AttendanceViewSet(viewsets.ModelViewSet):
         serializer = AttendanceCheckInSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
+        # Get client IP
+        client_ip = self.get_client_ip(request)
+
+        # Prepare check-in data with metadata
+        check_in_data = {
+            'check_in_time': timezone.now(),
+            'check_in_location': serializer.validated_data.get('location', ''),
+            'check_in_ip': client_ip,
+            'check_in_latitude': serializer.validated_data.get('latitude'),
+            'check_in_longitude': serializer.validated_data.get('longitude'),
+            'check_in_accuracy': serializer.validated_data.get('accuracy'),
+            'check_in_address': serializer.validated_data.get('address', ''),
+            'check_in_device_type': serializer.validated_data.get('device_type', ''),
+            'check_in_device_os': serializer.validated_data.get('device_os', ''),
+            'check_in_device_browser': serializer.validated_data.get('device_browser', ''),
+            'check_in_user_agent': serializer.validated_data.get('user_agent', ''),
+            'status': serializer.validated_data.get('status', 'present'),
+            'notes': serializer.validated_data.get('notes', '')
+        }
+
         # Create or update attendance
         if not attendance:
             attendance = Attendance.objects.create(
                 user=user,
                 date=today,
-                check_in_time=timezone.now(),
-                check_in_location=serializer.validated_data.get('location', ''),
-                status=serializer.validated_data.get('status', 'present'),
-                notes=serializer.validated_data.get('notes', '')
+                **check_in_data
             )
         else:
-            attendance.check_in_time = timezone.now()
-            attendance.check_in_location = serializer.validated_data.get('location', '')
-            attendance.status = serializer.validated_data.get('status', 'present')
-            attendance.notes = serializer.validated_data.get('notes', '')
+            for key, value in check_in_data.items():
+                setattr(attendance, key, value)
             attendance.save()
 
         return Response(
@@ -932,9 +959,21 @@ class AttendanceViewSet(viewsets.ModelViewSet):
         serializer = AttendanceCheckOutSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        # Update check-out time
+        # Get client IP
+        client_ip = self.get_client_ip(request)
+
+        # Update check-out data with metadata
         attendance.check_out_time = timezone.now()
         attendance.check_out_location = serializer.validated_data.get('location', '')
+        attendance.check_out_ip = client_ip
+        attendance.check_out_latitude = serializer.validated_data.get('latitude')
+        attendance.check_out_longitude = serializer.validated_data.get('longitude')
+        attendance.check_out_accuracy = serializer.validated_data.get('accuracy')
+        attendance.check_out_address = serializer.validated_data.get('address', '')
+        attendance.check_out_device_type = serializer.validated_data.get('device_type', '')
+        attendance.check_out_device_os = serializer.validated_data.get('device_os', '')
+        attendance.check_out_device_browser = serializer.validated_data.get('device_browser', '')
+        attendance.check_out_user_agent = serializer.validated_data.get('user_agent', '')
         if serializer.validated_data.get('notes'):
             attendance.notes += '\n' + serializer.validated_data.get('notes', '')
         attendance.save()
@@ -1094,6 +1133,203 @@ class AttendanceViewSet(viewsets.ModelViewSet):
         serializer = AttendanceSerializer(queryset, many=True)
         return Response(serializer.data)
 
+    @action(detail=False, methods=['get'], permission_classes=[CanManageTeamAttendance])
+    def team_attendance(self, request):
+        """
+        Get team attendance (Admin/Manager/Team Lead only)
+        Query params: user_id, department_id, start_date, end_date, status
+        """
+        user = request.user
+        queryset = Attendance.objects.all()
+
+        # Filter based on role
+        if user.role == 'manager':
+            # Manager sees department attendance
+            try:
+                managed_dept = Department.objects.filter(manager=user).first()
+                if managed_dept:
+                    employee_ids = managed_dept.employees.values_list('user_id', flat=True)
+                    queryset = queryset.filter(user_id__in=employee_ids)
+            except:
+                pass
+        elif user.role == 'team_lead':
+            # Team Lead sees direct reports
+            managed_employee_ids = Employee.objects.filter(manager=user).values_list('user_id', flat=True)
+            queryset = queryset.filter(user_id__in=managed_employee_ids)
+        # Admin sees all (no filter needed)
+
+        # Apply additional filters
+        user_id = request.query_params.get('user_id')
+        if user_id:
+            queryset = queryset.filter(user_id=user_id)
+
+        start_date = request.query_params.get('start_date')
+        if start_date:
+            try:
+                start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+                queryset = queryset.filter(date__gte=start_date)
+            except ValueError:
+                pass
+
+        end_date = request.query_params.get('end_date')
+        if end_date:
+            try:
+                end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+                queryset = queryset.filter(date__lte=end_date)
+            except ValueError:
+                pass
+
+        status_filter = request.query_params.get('status')
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+
+        # Paginate
+        queryset = queryset.order_by('-date', '-check_in_time')[:100]
+
+        serializer = AttendanceSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], permission_classes=[CanManageTeamAttendance])
+    def monthly_report(self, request):
+        """
+        Get monthly attendance report
+        Query params: user_id (required for non-admin), year, month
+        """
+        user = request.user
+        user_id = request.query_params.get('user_id')
+        year = request.query_params.get('year', timezone.now().year)
+        month = request.query_params.get('month', timezone.now().month)
+
+        try:
+            year = int(year)
+            month = int(month)
+        except (ValueError, TypeError):
+            return Response({'error': 'Invalid year or month'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Determine target user
+        if user_id:
+            target_user = get_user_model().objects.filter(id=user_id).first()
+            if not target_user:
+                return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+        elif user.role in ['admin', 'manager', 'team_lead']:
+            return Response({'error': 'user_id required for managers'}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            target_user = user
+
+        # Get month date range
+        from calendar import monthrange
+        start_date = datetime(year, month, 1).date()
+        last_day = monthrange(year, month)[1]
+        end_date = datetime(year, month, last_day).date()
+
+        # Get attendances
+        attendances = Attendance.objects.filter(
+            user=target_user,
+            date__gte=start_date,
+            date__lte=end_date
+        ).order_by('date')
+
+        # Calculate stats
+        total_days = attendances.count()
+        present_days = attendances.filter(status__in=['present', 'late']).count()
+        late_days = attendances.filter(is_late=True).count()
+        wfh_days = attendances.filter(status='wfh').count()
+        total_hours = sum([att.total_hours for att in attendances if att.total_hours], 0)
+
+        report = {
+            'user': {
+                'id': target_user.id,
+                'username': target_user.username,
+                'full_name': target_user.get_full_name() or target_user.username
+            },
+            'year': year,
+            'month': month,
+            'stats': {
+                'total_days': total_days,
+                'present_days': present_days,
+                'late_days': late_days,
+                'wfh_days': wfh_days,
+                'total_hours': round(total_hours, 2)
+            },
+            'attendances': AttendanceSerializer(attendances, many=True).data
+        }
+
+        return Response(report)
+
+    @action(detail=False, methods=['get'], permission_classes=[CanManageTeamAttendance])
+    def export_attendance(self, request):
+        """
+        Export attendance to CSV
+        Query params: start_date, end_date, user_id
+        """
+        import csv
+        from django.http import HttpResponse
+
+        user = request.user
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        user_id = request.query_params.get('user_id')
+
+        queryset = Attendance.objects.all()
+
+        # Apply role-based filtering (same as team_attendance)
+        if user.role == 'manager':
+            try:
+                managed_dept = Department.objects.filter(manager=user).first()
+                if managed_dept:
+                    employee_ids = managed_dept.employees.values_list('user_id', flat=True)
+                    queryset = queryset.filter(user_id__in=employee_ids)
+            except:
+                pass
+        elif user.role == 'team_lead':
+            managed_employee_ids = Employee.objects.filter(manager=user).values_list('user_id', flat=True)
+            queryset = queryset.filter(user_id__in=managed_employee_ids)
+
+        # Apply filters
+        if user_id:
+            queryset = queryset.filter(user_id=user_id)
+        if start_date:
+            try:
+                queryset = queryset.filter(date__gte=datetime.strptime(start_date, '%Y-%m-%d').date())
+            except ValueError:
+                pass
+        if end_date:
+            try:
+                queryset = queryset.filter(date__lte=datetime.strptime(end_date, '%Y-%m-%d').date())
+            except ValueError:
+                pass
+
+        queryset = queryset.order_by('-date', '-check_in_time')
+
+        # Create CSV response
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="attendance_{timezone.now().strftime("%Y%m%d")}.csv"'
+
+        writer = csv.writer(response)
+        writer.writerow([
+            'Date', 'User', 'Check In', 'Check Out', 'Total Hours', 'Status',
+            'Check In IP', 'Check In Device', 'Check In Location',
+            'Check Out IP', 'Check Out Device', 'Check Out Location'
+        ])
+
+        for att in queryset:
+            writer.writerow([
+                att.date.strftime('%Y-%m-%d'),
+                att.user.get_full_name() or att.user.username,
+                att.check_in_time.strftime('%H:%M:%S') if att.check_in_time else '',
+                att.check_out_time.strftime('%H:%M:%S') if att.check_out_time else '',
+                att.total_hours or '',
+                att.get_status_display(),
+                att.check_in_ip or '',
+                f"{att.check_in_device_type} - {att.check_in_device_os}" if att.check_in_device_type else '',
+                att.check_in_address or att.check_in_location or '',
+                att.check_out_ip or '',
+                f"{att.check_out_device_type} - {att.check_out_device_os}" if att.check_out_device_type else '',
+                att.check_out_address or att.check_out_location or ''
+            ])
+
+        return response
+
 
 class AttendanceSettingsViewSet(viewsets.ModelViewSet):
     """
@@ -1115,3 +1351,124 @@ class AttendanceSettingsViewSet(viewsets.ModelViewSet):
         settings = AttendanceSettings.get_settings()
         serializer = self.get_serializer(settings)
         return Response(serializer.data)
+
+
+# ===== Leave Management ViewSets =====
+
+class LeaveTypeViewSet(viewsets.ModelViewSet):
+    """ViewSet for LeaveType (Admin only)"""
+    queryset = LeaveType.objects.filter(is_active=True)
+    serializer_class = LeaveTypeSerializer
+    permission_classes = [IsAdminOrManager]
+
+
+class LeaveBalanceViewSet(viewsets.ReadOnlyModelViewSet):
+    """ViewSet for LeaveBalance"""
+    queryset = LeaveBalance.objects.all()
+    serializer_class = LeaveBalanceSerializer
+    permission_classes = [IsAdminOrManagerOrSelf]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.role in ['admin', 'manager'] or user.is_superuser:
+            return LeaveBalance.objects.all()
+        return LeaveBalance.objects.filter(user=user)
+
+    @action(detail=False, methods=['get'])
+    def my_balance(self, request):
+        """Get current user's leave balance"""
+        year = request.query_params.get('year', timezone.now().year)
+        balances = LeaveBalance.objects.filter(user=request.user, year=year)
+        serializer = self.get_serializer(balances, many=True)
+        return Response(serializer.data)
+
+
+class LeaveRequestViewSet(viewsets.ModelViewSet):
+    """ViewSet for LeaveRequest"""
+    queryset = LeaveRequest.objects.all()
+    serializer_class = LeaveRequestSerializer
+    permission_classes = [CanManageLeaveRequests]
+
+    def get_queryset(self):
+        user = self.request.user
+
+        # Admin sees all
+        if user.role == 'admin' or user.is_superuser:
+            return LeaveRequest.objects.all()
+
+        # Manager sees department requests
+        if user.role == 'manager':
+            try:
+                managed_dept = Department.objects.filter(manager=user).first()
+                if managed_dept:
+                    employee_ids = managed_dept.employees.values_list('user_id', flat=True)
+                    return LeaveRequest.objects.filter(user_id__in=employee_ids)
+            except:
+                pass
+
+        # Team Lead sees direct reports
+        if user.role == 'team_lead':
+            managed_employee_ids = Employee.objects.filter(manager=user).values_list('user_id', flat=True)
+            return LeaveRequest.objects.filter(user_id__in=managed_employee_ids)
+
+        # User sees own requests
+        return LeaveRequest.objects.filter(user=user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+    @action(detail=False, methods=['get'])
+    def my_requests(self, request):
+        """Get current user's leave requests"""
+        requests = LeaveRequest.objects.filter(user=request.user)
+        serializer = self.get_serializer(requests, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def pending_approvals(self, request):
+        """Get pending requests for approval (manager/team lead)"""
+        queryset = self.get_queryset().filter(status='pending')
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def process_request(self, request, pk=None):
+        """Approve or reject leave request"""
+        leave_request = self.get_object()
+
+        if leave_request.status != 'pending':
+            return Response(
+                {'error': 'Leave request already processed'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        action_type = request.data.get('action')  # 'approve' or 'reject'
+        rejection_reason = request.data.get('rejection_reason', '')
+
+        if action_type == 'approve':
+            leave_request.status = 'approved'
+            leave_request.approver = request.user
+            leave_request.approved_at = timezone.now()
+            leave_request.save()  # This triggers attendance creation and balance update
+
+            return Response({
+                'message': 'Leave request approved',
+                'leave_request': LeaveRequestSerializer(leave_request).data
+            })
+
+        elif action_type == 'reject':
+            leave_request.status = 'rejected'
+            leave_request.approver = request.user
+            leave_request.approved_at = timezone.now()
+            leave_request.rejection_reason = rejection_reason
+            leave_request.save()
+
+            return Response({
+                'message': 'Leave request rejected',
+                'leave_request': LeaveRequestSerializer(leave_request).data
+            })
+
+        return Response(
+            {'error': 'Invalid action. Use "approve" or "reject"'},
+            status=status.HTTP_400_BAD_REQUEST
+        )

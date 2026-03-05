@@ -3,6 +3,114 @@ import axios from 'axios';
 const API_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
 
 /**
+ * Helper: Detect device information from browser
+ */
+const getDeviceInfo = () => {
+  const ua = navigator.userAgent;
+
+  // Detect device type
+  const isMobile = /Mobile|Android|iPhone|iPad/i.test(ua);
+  const isTablet = /iPad|Android(?!.*Mobile)/i.test(ua);
+  const device_type = isMobile ? 'Mobile' : isTablet ? 'Tablet' : 'Desktop';
+
+  // Detect OS
+  let device_os = 'Unknown';
+  if (ua.includes('Win')) device_os = 'Windows';
+  else if (ua.includes('Mac')) device_os = 'macOS';
+  else if (ua.includes('Linux')) device_os = 'Linux';
+  else if (ua.includes('Android')) device_os = 'Android';
+  else if (ua.includes('iOS') || ua.includes('iPhone') || ua.includes('iPad')) device_os = 'iOS';
+
+  // Detect Browser
+  let device_browser = 'Unknown';
+  if (ua.includes('Edg')) device_browser = 'Edge';
+  else if (ua.includes('Chrome')) device_browser = 'Chrome';
+  else if (ua.includes('Firefox')) device_browser = 'Firefox';
+  else if (ua.includes('Safari')) device_browser = 'Safari';
+
+  return {
+    device_type,
+    device_os,
+    device_browser,
+    user_agent: ua
+  };
+};
+
+/**
+ * Helper: Get device location via Geolocation API
+ */
+const getDeviceLocation = async () => {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error('Geolocation not supported'));
+      return;
+    }
+
+    const options = {
+      enableHighAccuracy: false, // Laptop/PC will use Wi-Fi, phone will use GPS
+      timeout: 5000,
+      maximumAge: 60000 // Cache for 1 minute
+    };
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        resolve({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy
+        });
+      },
+      (error) => {
+        console.warn('Geolocation error:', error.message);
+        resolve(null); // Don't fail if location unavailable
+      },
+      options
+    );
+  });
+};
+
+/**
+ * Helper: Reverse geocode coordinates to address
+ * Uses OpenStreetMap Nominatim API (free, no API key needed)
+ */
+const reverseGeocode = async (lat, lng) => {
+  try {
+    const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`;
+    const response = await fetch(url);
+    const data = await response.json();
+    return data.display_name || '';
+  } catch (error) {
+    console.warn('Reverse geocoding failed:', error);
+    return '';
+  }
+};
+
+/**
+ * Helper: Collect all metadata for check-in/check-out
+ */
+const collectMetadata = async () => {
+  // Get device info (always available)
+  const deviceInfo = getDeviceInfo();
+
+  // Try to get location (may fail if permission denied)
+  const location = await getDeviceLocation();
+
+  // If location available, get address
+  let address = '';
+  if (location) {
+    address = await reverseGeocode(location.latitude, location.longitude);
+  }
+
+  return {
+    ...deviceInfo,
+    latitude: location?.latitude || null,
+    longitude: location?.longitude || null,
+    accuracy: location?.accuracy || null,
+    address: address
+  };
+};
+
+/**
  * Attendance Service
  * Handles all attendance-related API calls
  */
@@ -24,12 +132,18 @@ const attendanceService = {
    */
   checkIn: async (data = {}) => {
     const token = localStorage.getItem('access_token');
+
+    // Collect device and location metadata
+    const metadata = await collectMetadata();
+
     const response = await axios.post(
       `${API_URL}/hr/attendances/check_in/`,
       {
         location: data.location || '',
         notes: data.notes || '',
-        status: data.status || 'present'
+        status: data.status || 'present',
+        // Include metadata
+        ...metadata
       },
       {
         headers: { Authorization: `Bearer ${token}` }
@@ -44,11 +158,17 @@ const attendanceService = {
    */
   checkOut: async (data = {}) => {
     const token = localStorage.getItem('access_token');
+
+    // Collect device and location metadata
+    const metadata = await collectMetadata();
+
     const response = await axios.post(
       `${API_URL}/hr/attendances/check_out/`,
       {
         location: data.location || '',
-        notes: data.notes || ''
+        notes: data.notes || '',
+        // Include metadata
+        ...metadata
       },
       {
         headers: { Authorization: `Bearer ${token}` }
@@ -173,5 +293,8 @@ const attendanceService = {
     return response.data;
   }
 };
+
+// Export helper for use in components (e.g., preview metadata before submit)
+export { collectMetadata };
 
 export default attendanceService;

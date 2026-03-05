@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { X, Clock, MapPin, FileText } from 'lucide-react';
-import attendanceService from '../services/attendanceService';
+import { X, Clock, MapPin, FileText, Monitor, RefreshCw } from 'lucide-react';
+import attendanceService, { collectMetadata } from '../services/attendanceService';
 
 /**
  * AttendanceModal - Modal for check-in/check-out
@@ -18,6 +18,8 @@ export default function AttendanceModal({ isOpen, onClose, onSuccess, type = 'ch
     status: 'present' // For check-in only
   });
   const [error, setError] = useState('');
+  const [metadata, setMetadata] = useState(null);
+  const [metadataLoading, setMetadataLoading] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -27,8 +29,26 @@ export default function AttendanceModal({ isOpen, onClose, onSuccess, type = 'ch
         status: 'present'
       });
       setError('');
+      // Collect metadata when modal opens
+      loadMetadata();
     }
   }, [isOpen]);
+
+  const loadMetadata = async () => {
+    setMetadataLoading(true);
+    try {
+      const data = await collectMetadata();
+      setMetadata(data);
+      // Auto-fill address if available
+      if (data.address) {
+        setFormData(prev => ({ ...prev, location: data.address }));
+      }
+    } catch (error) {
+      console.error('Failed to collect metadata:', error);
+    } finally {
+      setMetadataLoading(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -109,6 +129,45 @@ export default function AttendanceModal({ isOpen, onClose, onSuccess, type = 'ch
                 day: 'numeric'
               })}
             </p>
+          </div>
+
+          {/* Metadata Preview */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm font-semibold text-blue-800 flex items-center">
+                <Monitor className="w-4 h-4 mr-1" />
+                Check-in Information
+              </p>
+              <button
+                type="button"
+                onClick={loadMetadata}
+                disabled={metadataLoading}
+                className="text-blue-600 hover:text-blue-800 p-1"
+                title="Refresh location"
+              >
+                <RefreshCw className={`w-4 h-4 ${metadataLoading ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+            {metadataLoading ? (
+              <p className="text-sm text-gray-600">Detecting location and device...</p>
+            ) : metadata ? (
+              <ul className="text-sm text-gray-700 space-y-1">
+                <li>🖥️ Device: {metadata.device_type} ({metadata.device_os})</li>
+                <li>🌐 Browser: {metadata.device_browser}</li>
+                {metadata.latitude && metadata.longitude ? (
+                  <>
+                    <li>📍 Location: {metadata.latitude.toFixed(6)}, {metadata.longitude.toFixed(6)}</li>
+                    <li>🎯 Accuracy: ±{Math.round(metadata.accuracy)}m</li>
+                    {metadata.address && <li>📌 Address: {metadata.address}</li>}
+                  </>
+                ) : (
+                  <li className="text-yellow-700">⚠️ Location unavailable (permission denied or not supported)</li>
+                )}
+                <li className="text-xs text-gray-500 mt-2">🔒 IP address will be recorded for security</li>
+              </ul>
+            ) : (
+              <p className="text-sm text-gray-600">Failed to collect information</p>
+            )}
           </div>
 
           {/* Status Selection (Check-in only) */}
