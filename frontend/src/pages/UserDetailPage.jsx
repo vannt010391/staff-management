@@ -47,11 +47,19 @@ export default function UserDetailPage() {
   const handleChangeUserPassword = async (e) => {
     e.preventDefault();
 
+    // Validate all fields are filled
     if (!passwordData.new_password || !passwordData.new_password2) {
-      toast.error('Please fill in password fields');
+      toast.error('Please fill in all password fields');
       return;
     }
 
+    // Validate minimum password length
+    if (passwordData.new_password.length < 8) {
+      toast.error('New password must be at least 8 characters long');
+      return;
+    }
+
+    // Validate passwords match
     if (passwordData.new_password !== passwordData.new_password2) {
       toast.error('Password confirmation does not match');
       return;
@@ -64,9 +72,21 @@ export default function UserDetailPage() {
         new_password2: passwordData.new_password2,
       });
       setPasswordData({ new_password: '', new_password2: '' });
-      toast.success('User password updated successfully');
+      toast.success(`Password updated successfully for ${user.username}`);
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to update user password');
+      // Handle different error formats
+      const errorData = error.response?.data;
+      if (errorData) {
+        if (errorData.new_password) {
+          toast.error(errorData.new_password[0] || errorData.new_password);
+        } else if (errorData.detail) {
+          toast.error(errorData.detail);
+        } else {
+          toast.error('Failed to update user password');
+        }
+      } else {
+        toast.error('Failed to update user password. Please try again.');
+      }
     } finally {
       setPasswordLoading(false);
     }
@@ -122,28 +142,47 @@ export default function UserDetailPage() {
 
         {canChangeThisUserPassword && (
           <form onSubmit={handleChangeUserPassword} className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg space-y-4">
-            <h2 className="text-lg font-bold text-gray-900">Change User Password</h2>
+            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+              <Shield className="h-5 w-5 text-indigo-600" />
+              Change User Password
+            </h2>
+            <p className="text-sm text-gray-600">Set a new password for {user.username}</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <input
-                type="password"
-                value={passwordData.new_password}
-                onChange={(e) => setPasswordData((prev) => ({ ...prev, new_password: e.target.value }))}
-                placeholder="New password"
-                className="px-3 py-2 border border-gray-300 rounded-lg"
-              />
-              <input
-                type="password"
-                value={passwordData.new_password2}
-                onChange={(e) => setPasswordData((prev) => ({ ...prev, new_password2: e.target.value }))}
-                placeholder="Confirm new password"
-                className="px-3 py-2 border border-gray-300 rounded-lg"
-              />
+              <div>
+                <input
+                  type="password"
+                  value={passwordData.new_password}
+                  onChange={(e) => setPasswordData((prev) => ({ ...prev, new_password: e.target.value }))}
+                  placeholder="New password (min. 8 chars)"
+                  className="px-3 py-2 border border-gray-300 rounded-lg w-full focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  required
+                  minLength={8}
+                />
+                {passwordData.new_password && passwordData.new_password.length < 8 && (
+                  <p className="text-xs text-red-500 mt-1">Minimum 8 characters required</p>
+                )}
+              </div>
+              <div>
+                <input
+                  type="password"
+                  value={passwordData.new_password2}
+                  onChange={(e) => setPasswordData((prev) => ({ ...prev, new_password2: e.target.value }))}
+                  placeholder="Confirm new password"
+                  className="px-3 py-2 border border-gray-300 rounded-lg w-full focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  required
+                  minLength={8}
+                />
+                {passwordData.new_password2 && passwordData.new_password !== passwordData.new_password2 && (
+                  <p className="text-xs text-red-500 mt-1">Passwords do not match</p>
+                )}
+              </div>
             </div>
             <button
               type="submit"
               disabled={passwordLoading}
-              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 inline-flex items-center gap-2"
             >
+              <Shield className="h-4 w-4" />
               {passwordLoading ? 'Updating...' : 'Update Password'}
             </button>
           </form>
