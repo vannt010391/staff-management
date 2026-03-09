@@ -10,3 +10,4 @@ redis==5.0.1
 drf-yasg==1.21.7
 python-dotenv==1.0.0
 django-filter==23.5
+gunicorn==21.2.0

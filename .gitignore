@@ -1,1 +1,65 @@
-﻿nul
+﻿# Environment variables
+.env
+.env.local
+.env.*.local
+backend/.env
+frontend/.env.local
+
+# Docker volumes
+postgres_data/
+redis_data/
+static_volume/
+media_volume/
+certbot_www/
+certbot_conf/
+
+# Backup files
+*.sql
+*.tar.gz
+backups/
+
+# SSL certificates (managed by Certbot)
+nginx/ssl/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+*.egg-info/
+dist/
+build/
+*.log
+
+# Django
+*.sqlite3
+db.sqlite3
+staticfiles/
+media/
+.coverage
+htmlcov/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+dist/
+.cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+logs/
+*.log
