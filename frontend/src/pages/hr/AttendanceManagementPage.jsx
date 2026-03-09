@@ -46,17 +46,38 @@ export default function AttendanceManagementPage() {
       if (filters.user_id) params.append('user_id', filters.user_id);
       if (filters.status) params.append('status', filters.status);
 
-      const response = await axios.get(
-        `${API_BASE_URL}/hr/attendances/team_attendance/?${params.toString()}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const url = `${API_BASE_URL}/hr/attendances/team_attendance/?${params.toString()}`;
+      console.log('Loading attendances from:', url);
+
+      const response = await axios.get(url, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      console.log('Attendance response:', response.data);
 
       // Handle paginated response
       const data = Array.isArray(response.data) ? response.data : response.data.results || [];
+      console.log('Processed attendance data:', data);
+
       setAttendances(data);
       calculateStats(data);
     } catch (error) {
       console.error('Failed to load attendances:', error);
+      console.error('Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
+
+      // Show error message to user
+      if (error.response?.status === 403) {
+        alert('You do not have permission to view team attendance');
+      } else if (error.response?.status === 401) {
+        alert('Please login again');
+      } else {
+        alert(`Failed to load attendance: ${error.response?.data?.detail || error.message}`);
+      }
+
       setAttendances([]);
     } finally {
       setLoading(false);
