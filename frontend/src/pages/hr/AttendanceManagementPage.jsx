@@ -89,7 +89,12 @@ export default function AttendanceManagementPage() {
     const present = data.filter(a => a.status === 'present' || a.status === 'late').length;
     const late = data.filter(a => a.is_late).length;
     const wfh = data.filter(a => a.status === 'wfh').length;
-    const totalHours = data.reduce((sum, a) => sum + (a.total_hours || 0), 0);
+
+    // Ensure total_hours is converted to number before summing
+    const totalHours = data.reduce((sum, a) => {
+      const hours = parseFloat(a.total_hours) || 0;
+      return sum + hours;
+    }, 0);
 
     setStats({
       total_records: total,
