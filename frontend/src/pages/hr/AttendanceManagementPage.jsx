@@ -312,11 +312,11 @@ export default function AttendanceManagementPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Check In</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Check In Location</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Check Out</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Check Out Location</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Hours</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Check In IP</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Device</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -340,13 +340,15 @@ export default function AttendanceManagementPage() {
                       {attendance.user_details?.full_name || 'Unknown'}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm">{formatTime(attendance.check_in_time)}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600 max-w-xs truncate" title={attendance.check_in_address || attendance.check_in_location}>
+                      {attendance.check_in_address || attendance.check_in_location || '-'}
+                    </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm">{formatTime(attendance.check_out_time)}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600 max-w-xs truncate" title={attendance.check_out_address || attendance.check_out_location}>
+                      {attendance.check_out_address || attendance.check_out_location || '-'}
+                    </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm">{attendance.total_hours ? `${attendance.total_hours}h` : '-'}</td>
                     <td className="px-4 py-3 whitespace-nowrap">{getStatusBadge(attendance.status, attendance.is_late)}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{attendance.check_in_ip || '-'}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                      {attendance.check_in_device_type ? `${attendance.check_in_device_type} - ${attendance.check_in_device_os}` : '-'}
-                    </td>
                   </tr>
                 ))
               )}
