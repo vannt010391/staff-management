@@ -119,15 +119,22 @@ class ChangePasswordSerializer(serializers.Serializer):
         """Validate that new passwords match"""
         if attrs['new_password'] != attrs['new_password2']:
             raise serializers.ValidationError({
-                "new_password": "Password fields didn't match."
+                "new_password": "New password and confirmation password do not match."
             })
+
+        # Validate new password is different from old password
+        if attrs.get('old_password') == attrs.get('new_password'):
+            raise serializers.ValidationError({
+                "new_password": "New password must be different from the current password."
+            })
+
         return attrs
 
     def validate_old_password(self, value):
         """Validate old password"""
         user = self.context['request'].user
         if not user.check_password(value):
-            raise serializers.ValidationError("Old password is incorrect.")
+            raise serializers.ValidationError("Current password is incorrect. Please try again.")
         return value
 
     def save(self, **kwargs):
