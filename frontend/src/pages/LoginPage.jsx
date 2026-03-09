@@ -42,7 +42,7 @@ export default function LoginPage() {
             <LogIn className="h-8 w-8 text-white" />
           </div>
           <h2 className="mt-6 text-3xl font-extrabold text-gray-900 tracking-tight">
-            Freelancer Management
+            WorkHub
           </h2>
           <p className="mt-2 text-sm text-gray-600">
             Sign in to your account
@@ -103,13 +103,6 @@ export default function LoginPage() {
             )}
           </button>
         </form>
-
-        {/* Demo credentials */}
-        <div className="mt-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-100">
-          <p className="text-sm text-gray-700 text-center font-medium">
-            <span className="text-blue-600">Demo:</span> username: <span className="font-mono font-bold">admin</span> / password: <span className="font-mono font-bold">admin123</span>
-          </p>
-        </div>
       </div>
     </div>
   );
