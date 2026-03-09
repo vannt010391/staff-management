@@ -11,3 +11,4 @@ export { default as SearchBar } from './SearchBar';
 export { default as EmptyState } from './EmptyState';
 export { default as Table } from './Table';
 export { default as ViewToggle } from './ViewToggle';
+export { default as RichTextEditor } from './RichTextEditor';

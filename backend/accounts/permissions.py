@@ -172,3 +172,42 @@ class CanDeleteUsers(permissions.BasePermission):
             request.user.is_authenticated and
             (request.user.role == 'admin' or request.user.is_superuser)
         )
+
+
+class IsManagerAdminOrStaffReadOnly(permissions.BasePermission):
+    """
+    Permission: Manager/Admin have full access, Staff has read-only access
+    """
+    def has_permission(self, request, view):
+        if not (request.user and request.user.is_authenticated):
+            return False
+
+        # Manager and Admin have full access
+        if request.user.role in ['admin', 'manager'] or request.user.is_superuser:
+            return True
+
+        # Staff has read-only access
+        if request.user.role == 'staff':
+            return request.method in permissions.SAFE_METHODS
+
+        return False
+
+
+class IsManagerAdminTeamLeadOrStaff(permissions.BasePermission):
+    """
+    Permission: Manager, Admin, Team Lead, and Staff can create/update
+    Only Admin can delete
+    """
+    def has_permission(self, request, view):
+        if not (request.user and request.user.is_authenticated):
+            return False
+
+        # DELETE only for admin
+        if request.method == 'DELETE':
+            return request.user.role == 'admin' or request.user.is_superuser
+
+        # Create, Read, Update for admin, manager, team_lead, and staff
+        if request.user.role in ['admin', 'manager', 'team_lead', 'staff'] or request.user.is_superuser:
+            return True
+
+        return False

@@ -45,13 +45,24 @@ class ProjectListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Project
         fields = [
-            'id', 'name', 'description', 'client_name',
+            'id', 'name', 'description', 'client_name', 'budget',
             'status', 'status_display', 'start_date', 'end_date',
             'created_by', 'created_by_username',
             'total_tasks', 'completed_tasks',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_by', 'created_at', 'updated_at']
+
+    def to_representation(self, instance):
+        """Hide budget field from staff users"""
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+
+        # If user is staff, remove budget field
+        if request and hasattr(request, 'user') and request.user.role == 'staff':
+            data.pop('budget', None)
+
+        return data
 
 
 class ProjectDetailSerializer(serializers.ModelSerializer):
@@ -69,7 +80,7 @@ class ProjectDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Project
         fields = [
-            'id', 'name', 'description', 'client_name',
+            'id', 'name', 'description', 'client_name', 'budget',
             'status', 'status_display', 'start_date', 'end_date',
             'created_by', 'created_by_username',
             'topics', 'design_rules',
@@ -78,6 +89,17 @@ class ProjectDetailSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'created_by', 'created_at', 'updated_at']
 
+    def to_representation(self, instance):
+        """Hide budget field from staff users"""
+        data = super().to_representation(instance)
+        request = self.context.get('request')
+
+        # If user is staff, remove budget field
+        if request and hasattr(request, 'user') and request.user.role == 'staff':
+            data.pop('budget', None)
+
+        return data
+
 
 class ProjectCreateUpdateSerializer(serializers.ModelSerializer):
     """Serializer for creating/updating projects"""
@@ -85,7 +107,7 @@ class ProjectCreateUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Project
         fields = [
-            'name', 'description', 'client_name',
+            'name', 'description', 'client_name', 'budget',
             'status', 'start_date', 'end_date'
         ]
 

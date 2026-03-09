@@ -26,12 +26,15 @@ export default function AttendanceManagementPage() {
   const loadUsers = async () => {
     try {
       const token = localStorage.getItem('access_token');
-      const response = await axios.get(`${API_BASE_URL}/accounts/users/`, {
+      const response = await axios.get(`${API_BASE_URL}/users/`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setUsers(response.data.results || response.data);
+      const userData = response.data.results || response.data || [];
+      console.log('Loaded users:', userData);
+      setUsers(userData);
     } catch (error) {
       console.error('Failed to load users:', error);
+      console.error('Error details:', error.response?.data);
     }
   };
 
@@ -169,6 +172,19 @@ export default function AttendanceManagementPage() {
       </span>
     );
   };
+
+  // Group attendances by date
+  const groupedAttendances = attendances.reduce((groups, attendance) => {
+    const date = attendance.date;
+    if (!groups[date]) {
+      groups[date] = [];
+    }
+    groups[date].push(attendance);
+    return groups;
+  }, {});
+
+  // Sort dates in descending order (newest first)
+  const sortedDates = Object.keys(groupedAttendances).sort((a, b) => new Date(b) - new Date(a));
 
   return (
     <div className="p-6 space-y-6">
@@ -333,23 +349,34 @@ export default function AttendanceManagementPage() {
                   </td>
                 </tr>
               ) : (
-                attendances.map((attendance) => (
-                  <tr key={attendance.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 whitespace-nowrap text-sm">{formatDate(attendance.date)}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">
-                      {attendance.user_details?.full_name || 'Unknown'}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm">{formatTime(attendance.check_in_time)}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600 max-w-xs truncate" title={attendance.check_in_address || attendance.check_in_location}>
-                      {attendance.check_in_address || attendance.check_in_location || '-'}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm">{formatTime(attendance.check_out_time)}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600 max-w-xs truncate" title={attendance.check_out_address || attendance.check_out_location}>
-                      {attendance.check_out_address || attendance.check_out_location || '-'}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm">{attendance.total_hours ? `${attendance.total_hours}h` : '-'}</td>
-                    <td className="px-4 py-3 whitespace-nowrap">{getStatusBadge(attendance.status, attendance.is_late)}</td>
-                  </tr>
+                sortedDates.map((date) => (
+                  <>
+                    {/* Date Header Row */}
+                    <tr key={`date-${date}`} className="bg-gray-100">
+                      <td colSpan="8" className="px-4 py-2 text-sm font-semibold text-gray-700">
+                        {formatDate(date)} ({groupedAttendances[date].length} records)
+                      </td>
+                    </tr>
+                    {/* Attendance Records for this Date */}
+                    {groupedAttendances[date].map((attendance) => (
+                      <tr key={attendance.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-400">↳</td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">
+                          {attendance.user_details?.full_name || 'Unknown'}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm">{formatTime(attendance.check_in_time)}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600 max-w-xs truncate" title={attendance.check_in_address || attendance.check_in_location}>
+                          {attendance.check_in_address || attendance.check_in_location || '-'}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm">{formatTime(attendance.check_out_time)}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600 max-w-xs truncate" title={attendance.check_out_address || attendance.check_out_location}>
+                          {attendance.check_out_address || attendance.check_out_location || '-'}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm">{attendance.total_hours ? `${attendance.total_hours}h` : '-'}</td>
+                        <td className="px-4 py-3 whitespace-nowrap">{getStatusBadge(attendance.status, attendance.is_late)}</td>
+                      </tr>
+                    ))}
+                  </>
                 ))
               )}
             </tbody>

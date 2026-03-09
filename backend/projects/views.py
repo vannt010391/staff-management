@@ -13,16 +13,16 @@ from .serializers import (
     TopicSerializer,
     DesignRuleSerializer
 )
-from accounts.permissions import IsManagerOrAdmin
+from accounts.permissions import IsManagerOrAdmin, IsManagerAdminOrStaffReadOnly, IsManagerAdminTeamLeadOrStaff
 
 
 class ProjectViewSet(viewsets.ModelViewSet):
     """
     ViewSet for Project CRUD operations
-    Only Manager and Admin can manage projects
+    Manager and Admin can manage projects, Staff can view (read-only)
     """
     queryset = Project.objects.all()
-    permission_classes = [IsManagerOrAdmin]
+    permission_classes = [IsManagerAdminOrStaffReadOnly]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['status', 'created_by']
     search_fields = ['name', 'description', 'client_name']
@@ -90,11 +90,11 @@ class ProjectViewSet(viewsets.ModelViewSet):
 class TopicViewSet(viewsets.ModelViewSet):
     """
     ViewSet for Topic CRUD operations
-    Only Manager and Admin can manage topics
+    Manager and Admin can manage topics, Staff can view (read-only)
     """
     queryset = Topic.objects.all()
     serializer_class = TopicSerializer
-    permission_classes = [IsManagerOrAdmin]
+    permission_classes = [IsManagerAdminOrStaffReadOnly]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['project']
     search_fields = ['name', 'description']
@@ -125,11 +125,12 @@ class TopicViewSet(viewsets.ModelViewSet):
 class DesignRuleViewSet(viewsets.ModelViewSet):
     """
     ViewSet for DesignRule CRUD operations
-    Only Manager and Admin can manage design rules
+    Manager, Admin, Team Lead, and Staff can create/update
+    Only Admin can delete
     """
     queryset = DesignRule.objects.all()
     serializer_class = DesignRuleSerializer
-    permission_classes = [IsManagerOrAdmin]
+    permission_classes = [IsManagerAdminTeamLeadOrStaff]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['project', 'category', 'is_required']
     search_fields = ['name', 'description']

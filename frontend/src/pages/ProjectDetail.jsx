@@ -23,6 +23,7 @@ import tasksService from '../services/tasks';
 import TaskForm from '../components/tasks/TaskForm';
 import { TASK_STATUS_LABELS, TASK_PRIORITY_LABELS } from '../constants';
 import { formatCurrency, getTaskAssigneeName } from '../utils/helpers';
+import { RichTextEditor } from '../components/ui';
 
 export default function ProjectDetail() {
   const { id } = useParams();
@@ -597,7 +598,10 @@ export default function ProjectDetail() {
                           {rule.is_required ? 'Required' : 'Optional'}
                         </span>
                       </div>
-                      <p className="text-sm text-gray-600">{rule.description}</p>
+                      <div
+                        className="text-sm text-gray-600 prose prose-sm max-w-none"
+                        dangerouslySetInnerHTML={{ __html: rule.description }}
+                      />
                     </div>
                     <div className="flex gap-2">
                       <button
@@ -723,11 +727,10 @@ export default function ProjectDetail() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Description *</label>
-                <textarea
-                  rows={4}
+                <RichTextEditor
                   value={ruleFormData.description}
-                  onChange={(e) => setRuleFormData((prev) => ({ ...prev, description: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  onChange={(html) => setRuleFormData((prev) => ({ ...prev, description: html }))}
+                  placeholder="Describe the design rule..."
                 />
               </div>
               <div className="flex gap-3 pt-2">

@@ -299,6 +299,7 @@ function getNavigationItems(role) {
       icon: UserCog,
       children: [
         { name: 'Attendance Management', href: '/hr/attendance-management', icon: Clock },
+        { name: 'Attendance Settings', href: '/hr/attendance-settings', icon: Settings },
         { name: 'Leave Management', href: '/hr/leave-management', icon: Calendar },
         { name: 'Leave Types', href: '/hr/leave-types', icon: Settings },
         { name: 'Career Paths', href: '/hr/career-paths', icon: TrendingUp },
@@ -338,9 +339,21 @@ function getNavigationItems(role) {
     },
   ];
 
-  const staffItems = [
-    { name: 'All Tasks', href: '/tasks', icon: ListTodo },
-    { name: 'Documents', href: '/documents', icon: FileText },
+  const staffGroups = [
+    {
+      name: 'Projects',
+      icon: FolderKanban,
+      children: [
+        { name: 'Projects', href: '/projects', icon: FolderKanban },
+        { name: 'Topics', href: '/topics', icon: Tag },
+        { name: 'Design Rules', href: '/design-rules', icon: Palette },
+        { name: 'Documents', href: '/documents', icon: FileText },
+        { name: 'My Tasks', href: '/tasks', icon: ListTodo },
+      ]
+    },
+  ];
+
+  const staffExtraItems = [
     { name: 'My Plans', href: '/hr/plans', icon: Target },
   ];
 
@@ -355,7 +368,7 @@ function getNavigationItems(role) {
   } else if (role === ROLES.TEAM_LEAD) {
     return [...commonItems, ...teamLeadGroups];
   } else if (role === ROLES.STAFF) {
-    return [...commonItems, ...staffItems];
+    return [...commonItems, ...staffGroups, ...staffExtraItems];
   } else if (role === ROLES.FREELANCER) {
     return [...commonItems, ...freelancerItems];
   }

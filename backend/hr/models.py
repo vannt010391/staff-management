@@ -1,6 +1,8 @@
 from django.db import models
 from django.conf import settings
 from django.core.validators import MinValueValidator, MaxValueValidator
+from django.utils import timezone
+from datetime import datetime, timedelta
 
 
 class Department(models.Model):
@@ -158,8 +160,7 @@ class Employee(models.Model):
     @property
     def years_of_service(self):
         """Tính số năm làm việc"""
-        from datetime import date
-        today = date.today()
+        today = timezone.now().date()
         delta = today - self.join_date
         return delta.days / 365.25
 
@@ -956,11 +957,22 @@ class Attendance(models.Model):
             delta = self.check_out_time - self.check_in_time
             self.total_hours = round(delta.total_seconds() / 3600, 2)
 
-        # Auto-mark as late if checked in after 9:00 AM (configurable)
+        # Auto-mark as late based on AttendanceSettings
         if self.check_in_time:
-            from datetime import time
-            late_threshold = time(9, 0)  # 9:00 AM
-            if self.check_in_time.time() > late_threshold:
+            settings = AttendanceSettings.get_settings()
+
+            # Calculate late threshold: work_start_time + late_threshold_minutes
+            work_start = settings.work_start_time
+            late_minutes = settings.late_threshold_minutes
+
+            # Convert work_start_time to datetime on the same day as check_in
+            start_datetime = timezone.make_aware(
+                datetime.combine(self.check_in_time.date(), work_start)
+            )
+            late_threshold = start_datetime + timedelta(minutes=late_minutes)
+
+            # Check if user is late
+            if self.check_in_time > late_threshold:
                 self.is_late = True
                 if self.status == 'present':
                     self.status = 'late'
@@ -1163,7 +1175,6 @@ class LeaveRequest(models.Model):
 
     def _calculate_business_days(self):
         """Calculate business days between start and end date (excluding weekends)"""
-        from datetime import timedelta
         current = self.start_date
         days = 0
         while current <= self.end_date:
@@ -1174,7 +1185,6 @@ class LeaveRequest(models.Model):
 
     def _create_attendance_records(self):
         """Create attendance records for approved leave days"""
-        from datetime import timedelta
         current = self.start_date
         while current <= self.end_date:
             if current.weekday() < 5:  # Only weekdays

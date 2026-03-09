@@ -138,17 +138,17 @@ class TaskViewSet(viewsets.ModelViewSet):
         """
         PRIVACY RULE IMPLEMENTATION:
         - Freelancers: only see their assigned tasks
-        - Staff: see all tasks (read-mostly)
+        - Staff: only see their assigned tasks (read-mostly)
         - Team Lead: see all tasks (can assign & review)
         - Manager & Admin: see all tasks (full access)
         """
         user = self.request.user
 
-        if user.role == 'freelancer':
-            # Freelancer only sees tasks assigned to them
+        if user.role in ['freelancer', 'staff']:
+            # Freelancer and Staff only see tasks assigned to them
             return Task.objects.filter(assigned_to=user)
-        elif user.role in ['staff', 'team_lead', 'manager', 'admin'] or user.is_superuser:
-            # Staff, Team Lead, Manager and Admin see all tasks
+        elif user.role in ['team_lead', 'manager', 'admin'] or user.is_superuser:
+            # Team Lead, Manager and Admin see all tasks
             return Task.objects.all()
         else:
             # Default: no tasks
@@ -179,7 +179,7 @@ class TaskViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         """
         Freelancers can only update status and add comments
-        Managers/Admins can update all fields
+        Staff, Team Lead, Managers, Admins can update all fields
         """
         user = self.request.user
 
@@ -196,8 +196,12 @@ class TaskViewSet(viewsets.ModelViewSet):
                 self._validate_freelancer_status_change(task, update_data['status'])
 
             serializer.save(**update_data)
-        else:
+        elif user.role in ['staff', 'team_lead', 'manager', 'admin'] or user.is_superuser:
+            # Staff, Team Lead, Manager, Admin can update all fields
             serializer.save()
+        else:
+            # Default: no update allowed
+            raise serializers.ValidationError("You do not have permission to update this task.")
 
     @action(detail=True, methods=['post'], permission_classes=[IsManagerOrAdmin])
     def assign(self, request, pk=None):
@@ -419,10 +423,10 @@ class TaskFileViewSet(viewsets.ModelViewSet):
         """Filter files based on task access"""
         user = self.request.user
 
-        if user.role == 'freelancer':
-            # Freelancer only sees files for their tasks
+        if user.role in ['freelancer', 'staff']:
+            # Freelancer and Staff only see files for their assigned tasks
             return TaskFile.objects.filter(task__assigned_to=user)
-        elif user.role in ['manager', 'admin'] or user.is_superuser:
+        elif user.role in ['team_lead', 'manager', 'admin'] or user.is_superuser:
             return TaskFile.objects.all()
         return TaskFile.objects.none()
 
@@ -452,10 +456,10 @@ class TaskCommentViewSet(viewsets.ModelViewSet):
         """Filter comments based on task access"""
         user = self.request.user
 
-        if user.role == 'freelancer':
-            # Freelancer only sees comments for their tasks
+        if user.role in ['freelancer', 'staff']:
+            # Freelancer and Staff only see comments for their assigned tasks
             return TaskComment.objects.filter(task__assigned_to=user)
-        elif user.role in ['manager', 'admin'] or user.is_superuser:
+        elif user.role in ['team_lead', 'manager', 'admin'] or user.is_superuser:
             return TaskComment.objects.all()
         return TaskComment.objects.none()
 

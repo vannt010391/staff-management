@@ -37,6 +37,7 @@ import CareerPathDetailPage from './pages/hr/CareerPathDetailPage';
 import PersonalReportDetailPage from './pages/hr/PersonalReportDetailPage';
 import PlanDetailPage from './pages/hr/PlanDetailPage';
 import AttendanceManagementPage from './pages/hr/AttendanceManagementPage';
+import AttendanceSettingsPage from './pages/hr/AttendanceSettingsPage';
 import LeaveRequestsPage from './pages/hr/LeaveRequestsPage';
 import LeaveManagementPage from './pages/hr/LeaveManagementPage';
 import LeaveTypesPage from './pages/hr/LeaveTypesPage';
@@ -98,6 +99,7 @@ function App() {
                     <Route path="/documents" element={<DocumentsPage />} />
                     <Route path="/attendance" element={<AttendancePage />} />
                     <Route path="/hr/attendance-management" element={<AttendanceManagementPage />} />
+                    <Route path="/hr/attendance-settings" element={<AttendanceSettingsPage />} />
                     <Route path="/hr/employees" element={<EmployeesPage />} />
                     <Route path="/hr/departments" element={<DepartmentsPage />} />
                     <Route path="/hr/departments/:id" element={<DepartmentDetailPage />} />

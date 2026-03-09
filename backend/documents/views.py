@@ -18,8 +18,10 @@ class DocumentViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        if user.role in ['admin', 'manager', 'team_lead'] or user.is_superuser:
+        # Admin, Manager, Team Lead, and Staff can see all documents
+        if user.role in ['admin', 'manager', 'team_lead', 'staff'] or user.is_superuser:
             return Document.objects.all()
+        # Others (freelancers) only see their own documents
         return Document.objects.filter(uploaded_by=user)
 
     def perform_create(self, serializer):
@@ -28,12 +30,16 @@ class DocumentViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         user = self.request.user
         document = serializer.instance
+        # Only admin, manager, team_lead, and document owner can update
+        # Staff can only view, not update
         if document.uploaded_by_id != user.id and user.role not in ['admin', 'manager', 'team_lead'] and not user.is_superuser:
             raise PermissionDenied('You can only update your own documents.')
         serializer.save()
 
     def perform_destroy(self, instance):
         user = self.request.user
+        # Only admin, manager, team_lead, and document owner can delete
+        # Staff cannot delete
         if instance.uploaded_by_id != user.id and user.role not in ['admin', 'manager', 'team_lead'] and not user.is_superuser:
             raise PermissionDenied('You can only delete your own documents.')
         instance.delete()

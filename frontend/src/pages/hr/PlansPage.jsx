@@ -6,9 +6,11 @@ import plansService from '../../services/plans';
 import api from '../../services/api';
 import PlanForm from '../../components/hr/PlanForm';
 import { PageHeader, StatCard, Button, EmptyState, Table, ViewToggle } from '../../components/ui';
+import { useAuthStore } from '../../stores/authStore';
 
 export default function PlansPage() {
   const navigate = useNavigate();
+  const { user } = useAuthStore();
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -320,16 +322,18 @@ export default function PlansPage() {
                 >
                   My Plans
                 </button>
-                <button
-                  onClick={() => setViewMode('all')}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                    viewMode === 'all'
-                      ? 'bg-purple-600 text-white'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  All Plans
-                </button>
+                {user?.role !== 'staff' && (
+                  <button
+                    onClick={() => setViewMode('all')}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                      viewMode === 'all'
+                        ? 'bg-purple-600 text-white'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    All Plans
+                  </button>
+                )}
               </div>
             </div>
           }

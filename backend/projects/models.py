@@ -15,6 +15,13 @@ class Project(models.Model):
     name = models.CharField(max_length=200, help_text='Tên dự án')
     description = models.TextField(blank=True, help_text='Mô tả dự án')
     client_name = models.CharField(max_length=200, blank=True, help_text='Tên khách hàng')
+    budget = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text='Ngân sách dự án (VND)'
+    )
     start_date = models.DateField(null=True, blank=True, help_text='Ngày bắt đầu')
     end_date = models.DateField(null=True, blank=True, help_text='Ngày kết thúc')
     status = models.CharField(

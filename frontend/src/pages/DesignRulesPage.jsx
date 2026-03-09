@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Palette, Plus, Search, Eye, Edit, Trash2, Loader2, Filter } from 'lucide-react';
 import { toast } from 'sonner';
 import projectsService from '../services/projects';
-import { Table, ViewToggle } from '../components/ui';
+import { Table, ViewToggle, RichTextEditor } from '../components/ui';
 import { useAuthStore } from '../stores/authStore';
 
 const CATEGORY_OPTIONS = [
@@ -18,7 +18,8 @@ const CATEGORY_OPTIONS = [
 export default function DesignRulesPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const canManage = user?.role === 'admin' || user?.role === 'manager';
+  const canManage = user?.role === 'admin' || user?.role === 'manager' || user?.role === 'team_lead' || user?.role === 'staff';
+  const canDelete = user?.role === 'admin';
 
   const [rules, setRules] = useState([]);
   const [projects, setProjects] = useState([]);
@@ -193,7 +194,12 @@ export default function DesignRulesPage() {
       key: 'description',
       label: 'Description',
       width: '25%',
-      render: (rule) => <span className="text-sm text-gray-600 line-clamp-2">{rule.description}</span>,
+      render: (rule) => (
+        <div
+          className="text-sm text-gray-600 line-clamp-2 prose prose-sm max-w-none"
+          dangerouslySetInnerHTML={{ __html: rule.description }}
+        />
+      ),
     },
     {
       key: 'required',
@@ -222,29 +228,29 @@ export default function DesignRulesPage() {
             <Eye className="h-3 w-3 text-indigo-600" />
           </button>
           {canManage && (
-            <>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  openEditForm(rule);
-                }}
-                className="p-1.5 hover:bg-blue-100 rounded-lg transition-colors"
-                title="Edit"
-              >
-                <Edit className="h-3 w-3 text-blue-600" />
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setRuleToDelete(rule);
-                  setShowDeleteConfirm(true);
-                }}
-                className="p-1.5 hover:bg-red-100 rounded-lg transition-colors"
-                title="Delete"
-              >
-                <Trash2 className="h-3 w-3 text-red-600" />
-              </button>
-            </>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                openEditForm(rule);
+              }}
+              className="p-1.5 hover:bg-blue-100 rounded-lg transition-colors"
+              title="Edit"
+            >
+              <Edit className="h-3 w-3 text-blue-600" />
+            </button>
+          )}
+          {canDelete && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setRuleToDelete(rule);
+                setShowDeleteConfirm(true);
+              }}
+              className="p-1.5 hover:bg-red-100 rounded-lg transition-colors"
+              title="Delete"
+            >
+              <Trash2 className="h-3 w-3 text-red-600" />
+            </button>
           )}
         </div>
       ),
@@ -355,27 +361,30 @@ export default function DesignRulesPage() {
               </div>
               <p className="text-xs text-blue-700 font-medium mb-2">{projectNameById[rule.project] || '-'}</p>
               <p className="text-xs text-gray-500 mb-2">{rule.category_display || rule.category}</p>
-              <p className="text-sm text-gray-600 line-clamp-3">{rule.description}</p>
+              <div
+                className="text-sm text-gray-600 line-clamp-3 prose prose-sm max-w-none"
+                dangerouslySetInnerHTML={{ __html: rule.description }}
+              />
               <div className="flex justify-end gap-2 mt-3 pt-3 border-t border-gray-100">
                 <button onClick={() => navigate(`/projects/${rule.project}`)} className="p-1.5 hover:bg-indigo-100 rounded-lg" title="Open Project">
                   <Eye className="h-3 w-3 text-indigo-600" />
                 </button>
                 {canManage && (
-                  <>
-                    <button onClick={() => openEditForm(rule)} className="p-1.5 hover:bg-blue-100 rounded-lg" title="Edit">
-                      <Edit className="h-3 w-3 text-blue-600" />
-                    </button>
-                    <button
-                      onClick={() => {
-                        setRuleToDelete(rule);
-                        setShowDeleteConfirm(true);
-                      }}
-                      className="p-1.5 hover:bg-red-100 rounded-lg"
-                      title="Delete"
-                    >
-                      <Trash2 className="h-3 w-3 text-red-600" />
-                    </button>
-                  </>
+                  <button onClick={() => openEditForm(rule)} className="p-1.5 hover:bg-blue-100 rounded-lg" title="Edit">
+                    <Edit className="h-3 w-3 text-blue-600" />
+                  </button>
+                )}
+                {canDelete && (
+                  <button
+                    onClick={() => {
+                      setRuleToDelete(rule);
+                      setShowDeleteConfirm(true);
+                    }}
+                    className="p-1.5 hover:bg-red-100 rounded-lg"
+                    title="Delete"
+                  >
+                    <Trash2 className="h-3 w-3 text-red-600" />
+                  </button>
                 )}
               </div>
             </div>
@@ -385,7 +394,7 @@ export default function DesignRulesPage() {
 
       {showForm && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-lg w-full shadow-2xl">
+          <div className="bg-white rounded-2xl p-6 max-w-3xl w-full shadow-2xl max-h-[90vh] overflow-y-auto">
             <h3 className="text-xl font-bold text-gray-900 mb-4">{selectedRule ? 'Edit Design Rule' : 'Create Design Rule'}</h3>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
@@ -445,11 +454,10 @@ export default function DesignRulesPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Description *</label>
-                <textarea
-                  rows={4}
+                <RichTextEditor
                   value={formData.description}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  onChange={(html) => setFormData((prev) => ({ ...prev, description: html }))}
+                  placeholder="Describe the design rule..."
                 />
               </div>
               <div className="flex gap-3 pt-2">
