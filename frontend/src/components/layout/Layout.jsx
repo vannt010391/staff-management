@@ -258,6 +258,7 @@ function SidebarContent({ navigation, currentPath }) {
 function getNavigationItems(role) {
   const commonItems = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+    { name: 'My Calendar', href: '/calendar', icon: Calendar },
     { name: 'Attendance', href: '/attendance', icon: Clock },
     { name: 'My Leave', href: '/hr/leave-requests', icon: Calendar },
     { name: 'My Profile', href: '/profile', icon: UserCircle },

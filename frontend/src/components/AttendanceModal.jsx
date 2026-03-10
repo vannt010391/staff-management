@@ -56,14 +56,29 @@ export default function AttendanceModal({ isOpen, onClose, onSuccess, type = 'ch
     setError('');
 
     try {
+      // Prepare data with the already-collected metadata
+      const submitData = {
+        location: formData.location,
+        notes: formData.notes,
+        ...(type === 'check-in' && { status: formData.status }),
+        // Include metadata if available, otherwise it will be empty
+        latitude: metadata?.latitude || null,
+        longitude: metadata?.longitude || null,
+        accuracy: metadata?.accuracy || null,
+        address: metadata?.address || '',
+        device_type: metadata?.device_type || '',
+        device_os: metadata?.device_os || '',
+        device_browser: metadata?.device_browser || '',
+        user_agent: metadata?.user_agent || ''
+      };
+
       let response;
       if (type === 'check-in') {
-        response = await attendanceService.checkIn(formData);
+        // Pass metadata directly to skip re-collection
+        response = await attendanceService.checkIn(submitData, true);
       } else {
-        response = await attendanceService.checkOut({
-          location: formData.location,
-          notes: formData.notes
-        });
+        // Pass metadata directly to skip re-collection
+        response = await attendanceService.checkOut(submitData, true);
       }
 
       if (onSuccess) {

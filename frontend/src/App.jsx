@@ -21,6 +21,7 @@ import UserDetailPage from './pages/UserDetailPage';
 import ProfilePage from './pages/ProfilePage';
 import DocumentsPage from './pages/DocumentsPage';
 import AttendancePage from './pages/AttendancePage';
+import CalendarPage from './pages/CalendarPage';
 
 // HR Pages
 import EmployeesPage from './pages/hr/EmployeesPage';
@@ -98,6 +99,7 @@ function App() {
                     <Route path="/profile" element={<ProfilePage />} />
                     <Route path="/documents" element={<DocumentsPage />} />
                     <Route path="/attendance" element={<AttendancePage />} />
+                    <Route path="/calendar" element={<CalendarPage />} />
                     <Route path="/hr/attendance-management" element={<AttendanceManagementPage />} />
                     <Route path="/hr/attendance-settings" element={<AttendanceSettingsPage />} />
                     <Route path="/hr/employees" element={<EmployeesPage />} />

@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     'hr',
     'crm',
     'documents',
+    'events',
 ]
 
 MIDDLEWARE = [

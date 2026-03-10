@@ -128,13 +128,29 @@ const attendanceService = {
 
   /**
    * Check in for today
-   * @param {Object} data - Check-in data (location, notes, status)
+   * @param {Object} data - Check-in data (location, notes, status, metadata)
+   * @param {boolean} skipMetadataCollection - If true, use metadata from data instead of collecting again
    */
-  checkIn: async (data = {}) => {
+  checkIn: async (data = {}, skipMetadataCollection = false) => {
     const token = localStorage.getItem('access_token');
 
-    // Collect device and location metadata
-    const metadata = await collectMetadata();
+    let metadata = {};
+    if (skipMetadataCollection) {
+      // Use provided metadata
+      metadata = {
+        latitude: data.latitude,
+        longitude: data.longitude,
+        accuracy: data.accuracy,
+        address: data.address,
+        device_type: data.device_type,
+        device_os: data.device_os,
+        device_browser: data.device_browser,
+        user_agent: data.user_agent
+      };
+    } else {
+      // Collect device and location metadata
+      metadata = await collectMetadata();
+    }
 
     const response = await axios.post(
       `${API_URL}/hr/attendances/check_in/`,
@@ -154,13 +170,29 @@ const attendanceService = {
 
   /**
    * Check out for today
-   * @param {Object} data - Check-out data (location, notes)
+   * @param {Object} data - Check-out data (location, notes, metadata)
+   * @param {boolean} skipMetadataCollection - If true, use metadata from data instead of collecting again
    */
-  checkOut: async (data = {}) => {
+  checkOut: async (data = {}, skipMetadataCollection = false) => {
     const token = localStorage.getItem('access_token');
 
-    // Collect device and location metadata
-    const metadata = await collectMetadata();
+    let metadata = {};
+    if (skipMetadataCollection) {
+      // Use provided metadata
+      metadata = {
+        latitude: data.latitude,
+        longitude: data.longitude,
+        accuracy: data.accuracy,
+        address: data.address,
+        device_type: data.device_type,
+        device_os: data.device_os,
+        device_browser: data.device_browser,
+        user_agent: data.user_agent
+      };
+    } else {
+      // Collect device and location metadata
+      metadata = await collectMetadata();
+    }
 
     const response = await axios.post(
       `${API_URL}/hr/attendances/check_out/`,
