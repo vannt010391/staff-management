@@ -49,7 +49,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
                   'join_date', 'current_salary', 'last_salary_review', 'date_of_birth', 'citizen_id',
                   'address', 'emergency_contact_name', 'emergency_contact_phone', 'is_active', 'notes',
                   'years_of_service', 'created_at', 'updated_at']
-        read_only_fields = ['created_at', 'updated_at', 'years_of_service', 'user']  # user is read-only on update
+        read_only_fields = ['created_at', 'updated_at', 'years_of_service']
         extra_kwargs = {
             'current_salary': {'write_only': False},
             'citizen_id': {'write_only': True},
@@ -57,6 +57,11 @@ class EmployeeSerializer(serializers.ModelSerializer):
             'emergency_contact_name': {'write_only': True},
             'emergency_contact_phone': {'write_only': True},
         }
+
+    def update(self, instance, validated_data):
+        # Prevent changing the linked user account on update
+        validated_data.pop('user', None)
+        return super().update(instance, validated_data)
 
 
 class EmployeeListSerializer(serializers.ModelSerializer):
