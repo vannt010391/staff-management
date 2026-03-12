@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, ListTodo, Save, Loader2, Upload } from 'lucide-react';
+import { X, ListTodo, Save, Loader2, Upload, UserPlus, Check, BookOpen } from 'lucide-react';
 import { toast } from 'sonner';
 import tasksService from '../../services/tasks';
 import projectsService from '../../services/projects';
@@ -11,13 +11,15 @@ export default function TaskForm({ task = null, projectId = null, onClose, onSuc
   const [loadingData, setLoadingData] = useState(true);
   const [projects, setProjects] = useState([]);
   const [users, setUsers] = useState([]);
+  const [topics, setTopics] = useState([]);
   const [selectedFiles, setSelectedFiles] = useState([]);
 
   const [formData, setFormData] = useState({
     title: task?.title || '',
     description: task?.description || '',
     project: task?.project || projectId || '',
-    assigned_to: task?.assigned_to || '',
+    topic: task?.topic || '',
+    assignees: task?.assignees || [],
     status: task?.status || 'new',
     priority: task?.priority || 'medium',
     due_date: task?.due_date || '',
@@ -32,19 +34,33 @@ export default function TaskForm({ task = null, projectId = null, onClose, onSuc
     fetchData();
   }, []);
 
+  // Fetch topics whenever selected project changes
+  useEffect(() => {
+    if (!formData.project) {
+      setTopics([]);
+      return;
+    }
+    projectsService.getAllTopics({ project: formData.project })
+      .then(data => setTopics(Array.isArray(data) ? data : []))
+      .catch(() => setTopics([]));
+  }, [formData.project]);
+
   const fetchData = async () => {
     try {
       setLoadingData(true);
-      const [projectsData, usersData] = await Promise.all([
+      const [projectsResult, usersResult] = await Promise.allSettled([
         projectsService.getProjects({ status: 'active' }),
         usersService.getUsers()
       ]);
 
-      setProjects(Array.isArray(projectsData) ? projectsData : []);
-      setUsers(Array.isArray(usersData) ? usersData : []);
+      if (projectsResult.status === 'fulfilled') {
+        setProjects(Array.isArray(projectsResult.value) ? projectsResult.value : []);
+      }
+      if (usersResult.status === 'fulfilled') {
+        setUsers(Array.isArray(usersResult.value) ? usersResult.value : []);
+      }
     } catch (error) {
-      console.error('Error fetching data:', error);
-      toast.error('Failed to load projects and users');
+      console.error('Error fetching form data:', error);
     } finally {
       setLoadingData(false);
     }
@@ -54,11 +70,22 @@ export default function TaskForm({ task = null, projectId = null, onClose, onSuc
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: value
+      [name]: value,
+      // Clear topic when project changes
+      ...(name === 'project' ? { topic: '' } : {}),
     }));
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
+  };
+
+  const toggleAssignee = (userId) => {
+    setFormData(prev => ({
+      ...prev,
+      assignees: prev.assignees.includes(userId)
+        ? prev.assignees.filter(id => id !== userId)
+        : [...prev.assignees, userId]
+    }));
   };
 
   const handleFileChange = (e) => {
@@ -71,10 +98,6 @@ export default function TaskForm({ task = null, projectId = null, onClose, onSuc
 
     if (!formData.title.trim()) {
       newErrors.title = 'Task title is required';
-    }
-
-    if (!formData.description.trim()) {
-      newErrors.description = 'Description is required';
     }
 
     if (!formData.project) {
@@ -100,13 +123,26 @@ export default function TaskForm({ task = null, projectId = null, onClose, onSuc
 
     setLoading(true);
 
+    // Build clean payload - omit empty optional fields
+    const payload = {
+      title: formData.title,
+      description: formData.description,
+      project: formData.project,
+      assignees: formData.assignees,
+      status: formData.status,
+      priority: formData.priority,
+    };
+    if (formData.topic) payload.topic = formData.topic;
+    if (formData.due_date) payload.due_date = formData.due_date;
+    if (formData.price) payload.price = formData.price;
+
     try {
       let result;
       if (task) {
-        result = await tasksService.updateTask(task.id, formData);
+        result = await tasksService.updateTask(task.id, payload);
         toast.success('Task updated successfully');
       } else {
-        result = await tasksService.createTask(formData);
+        result = await tasksService.createTask(payload);
         toast.success('Task created successfully');
 
         // Upload files if any
@@ -213,24 +249,19 @@ export default function TaskForm({ task = null, projectId = null, onClose, onSuc
             {/* Description */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Description <span className="text-red-500">*</span>
+                Description
               </label>
               <textarea
                 name="description"
                 value={formData.description}
                 onChange={handleChange}
                 rows={4}
-                className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all resize-none ${
-                  errors.description ? 'border-red-500' : 'border-gray-300'
-                }`}
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all resize-none"
                 placeholder="Describe the task..."
               />
-              {errors.description && (
-                <p className="mt-1 text-sm text-red-600">{errors.description}</p>
-              )}
             </div>
 
-            {/* Project & Assigned To */}
+            {/* Project + Topic */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               {/* Project */}
               <div>
@@ -257,24 +288,66 @@ export default function TaskForm({ task = null, projectId = null, onClose, onSuc
                 )}
               </div>
 
-              {/* Assigned To */}
+              {/* Topic */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Assign To
+                <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
+                  <BookOpen className="h-4 w-4 text-purple-500" />
+                  Topic
                 </label>
                 <select
-                  name="assigned_to"
-                  value={formData.assigned_to}
+                  name="topic"
+                  value={formData.topic}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all"
+                  disabled={!formData.project || topics.length === 0}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all disabled:bg-gray-50 disabled:text-gray-400"
                 >
-                  <option value="">Unassigned</option>
-                  {users.map(user => (
-                    <option key={user.id} value={user.id}>
-                      {user.first_name} {user.last_name} ({user.role})
+                  <option value="">{!formData.project ? 'Select project first' : topics.length === 0 ? 'No topics available' : 'No topic'}</option>
+                  {topics.map(topic => (
+                    <option key={topic.id} value={topic.id}>
+                      {topic.name}
                     </option>
                   ))}
                 </select>
+              </div>
+            </div>
+
+            {/* Assign To - Multi-select */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                <UserPlus className="h-4 w-4 text-green-600" />
+                Assign To
+                {formData.assignees.length > 0 && (
+                  <span className="ml-1 px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                    {formData.assignees.length} selected
+                  </span>
+                )}
+              </label>
+              <div className="flex flex-wrap gap-2 p-3 border-2 border-gray-200 rounded-xl bg-gray-50 max-h-48 overflow-y-auto">
+                {users.length === 0 ? (
+                  <p className="text-sm text-gray-400">No users available</p>
+                ) : (
+                  users.map(user => {
+                    const isSelected = formData.assignees.includes(user.id);
+                    return (
+                      <button
+                        key={user.id}
+                        type="button"
+                        onClick={() => toggleAssignee(user.id)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                          isSelected
+                            ? 'bg-green-100 border-green-400 text-green-700'
+                            : 'bg-white border-gray-300 text-gray-600 hover:border-green-300'
+                        }`}
+                      >
+                        {isSelected && <Check className="h-3 w-3" />}
+                        {user.first_name || user.last_name
+                          ? `${user.first_name} ${user.last_name}`.trim()
+                          : user.username}
+                        <span className="text-gray-400">({user.role})</span>
+                      </button>
+                    );
+                  })
+                )}
               </div>
             </div>
 

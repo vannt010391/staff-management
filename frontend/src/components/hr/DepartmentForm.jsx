@@ -118,7 +118,7 @@ export default function DepartmentForm({ department = null, onClose, onSuccess }
             >
               <option value="">No Manager Assigned</option>
               {employees.map(emp => (
-                <option key={emp.id} value={emp.user}>
+                <option key={emp.id} value={emp.user_details?.id || emp.user || ''}>
                   {emp.user_details?.full_name || emp.user_details?.username || emp.user_details?.email} ({emp.employee_id})
                 </option>
               ))}

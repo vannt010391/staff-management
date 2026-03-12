@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
+from django.db.models import Q
 
 from .models import Project, Topic, DesignRule
 from .serializers import (
@@ -19,7 +20,8 @@ from accounts.permissions import IsManagerOrAdmin, IsManagerAdminOrStaffReadOnly
 class ProjectViewSet(viewsets.ModelViewSet):
     """
     ViewSet for Project CRUD operations
-    Manager and Admin can manage projects, Staff can view (read-only)
+    Admin/Manager: see all projects
+    Others: see projects where their department is assigned OR they are a direct member
     """
     queryset = Project.objects.all()
     permission_classes = [IsManagerAdminOrStaffReadOnly]
@@ -28,6 +30,15 @@ class ProjectViewSet(viewsets.ModelViewSet):
     search_fields = ['name', 'description', 'client_name']
     ordering_fields = ['created_at', 'name', 'start_date', 'end_date']
     ordering = ['-created_at']
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.role in ['admin', 'manager'] or user.is_superuser:
+            return Project.objects.all().distinct()
+        # Staff/team_lead: see projects via department OR direct membership
+        return Project.objects.filter(
+            Q(departments__employees__user=user) | Q(members=user)
+        ).distinct()
 
     def get_serializer_class(self):
         if self.action == 'list':
@@ -39,6 +50,68 @@ class ProjectViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         """Set created_by to current user"""
         serializer.save(created_by=self.request.user)
+
+    @action(detail=True, methods=['post'], permission_classes=[IsManagerOrAdmin])
+    def add_department(self, request, pk=None):
+        """Add a department to this project"""
+        project = self.get_object()
+        dept_id = request.data.get('department_id')
+        if not dept_id:
+            return Response({'error': 'department_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+        from hr.models import Department
+        try:
+            dept = Department.objects.get(pk=dept_id)
+        except Department.DoesNotExist:
+            return Response({'error': 'Department not found'}, status=status.HTTP_404_NOT_FOUND)
+        project.departments.add(dept)
+        return Response({'status': 'department added'})
+
+    @action(detail=True, methods=['post'], permission_classes=[IsManagerOrAdmin])
+    def remove_department(self, request, pk=None):
+        """Remove a department from this project"""
+        project = self.get_object()
+        dept_id = request.data.get('department_id')
+        if not dept_id:
+            return Response({'error': 'department_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+        from hr.models import Department
+        try:
+            dept = Department.objects.get(pk=dept_id)
+        except Department.DoesNotExist:
+            return Response({'error': 'Department not found'}, status=status.HTTP_404_NOT_FOUND)
+        project.departments.remove(dept)
+        return Response({'status': 'department removed'})
+
+    @action(detail=True, methods=['post'], permission_classes=[IsManagerOrAdmin])
+    def add_member(self, request, pk=None):
+        """Add an individual member to this project"""
+        project = self.get_object()
+        user_id = request.data.get('user_id')
+        if not user_id:
+            return Response({'error': 'user_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        try:
+            member = User.objects.get(pk=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+        project.members.add(member)
+        return Response({'status': 'member added'})
+
+    @action(detail=True, methods=['post'], permission_classes=[IsManagerOrAdmin])
+    def remove_member(self, request, pk=None):
+        """Remove an individual member from this project"""
+        project = self.get_object()
+        user_id = request.data.get('user_id')
+        if not user_id:
+            return Response({'error': 'user_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        try:
+            member = User.objects.get(pk=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+        project.members.remove(member)
+        return Response({'status': 'member removed'})
 
     @action(detail=True, methods=['get'])
     def topics(self, request, pk=None):

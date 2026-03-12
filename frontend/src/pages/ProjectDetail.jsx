@@ -4,6 +4,7 @@ import {
   FolderKanban,
   ArrowLeft,
   Plus,
+  Upload,
   Calendar,
   Users,
   DollarSign,
@@ -21,6 +22,7 @@ import { toast } from 'sonner';
 import projectsService from '../services/projects';
 import tasksService from '../services/tasks';
 import TaskForm from '../components/tasks/TaskForm';
+import TaskImportModal from '../components/tasks/TaskImportModal';
 import { TASK_STATUS_LABELS, TASK_PRIORITY_LABELS } from '../constants';
 import { formatCurrency, getTaskAssigneeName } from '../utils/helpers';
 import { RichTextEditor } from '../components/ui';
@@ -32,6 +34,7 @@ export default function ProjectDetail() {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showTaskForm, setShowTaskForm] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState(null);
@@ -276,16 +279,25 @@ export default function ProjectDetail() {
           </h1>
           <p className="text-gray-600 mt-1">{project.description}</p>
         </div>
-        <button
-          onClick={() => {
-            setSelectedTask(null);
-            setShowTaskForm(true);
-          }}
-          className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl flex items-center gap-2"
-        >
-          <Plus className="h-5 w-5" />
-          Add Task
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowImportModal(true)}
+            className="px-5 py-3 bg-white border-2 border-green-500 text-green-700 rounded-xl font-semibold hover:bg-green-50 transition-all flex items-center gap-2 shadow"
+          >
+            <Upload className="h-5 w-5" />
+            Import Tasks
+          </button>
+          <button
+            onClick={() => {
+              setSelectedTask(null);
+              setShowTaskForm(true);
+            }}
+            className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl flex items-center gap-2"
+          >
+            <Plus className="h-5 w-5" />
+            Add Task
+          </button>
+        </div>
       </div>
 
       {/* Project Info Cards */}
@@ -629,6 +641,18 @@ export default function ProjectDetail() {
           )}
         </div>
       </div>
+
+      {/* Import Tasks Modal */}
+      {showImportModal && (
+        <TaskImportModal
+          projectId={project.id}
+          onClose={() => setShowImportModal(false)}
+          onSuccess={() => {
+            setShowImportModal(false);
+            fetchProjectAndTasks();
+          }}
+        />
+      )}
 
       {/* Task Form Modal */}
       {showTaskForm && (

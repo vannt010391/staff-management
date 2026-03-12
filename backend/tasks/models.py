@@ -26,7 +26,7 @@ class Task(models.Model):
 
     # Basic Info
     title = models.CharField(max_length=200, help_text='Tiêu đề task')
-    description = models.TextField(help_text='Mô tả chi tiết task')
+    description = models.TextField(blank=True, default='', help_text='Mô tả chi tiết task')
 
     # Relationships
     project = models.ForeignKey(
@@ -51,7 +51,13 @@ class Task(models.Model):
         null=True,
         blank=True,
         related_name='assigned_tasks',
-        help_text='Freelancer được giao task'
+        help_text='Freelancer được giao task (legacy)'
+    )
+    assignees = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name='assignee_tasks',
+        help_text='Nhân viên được giao task'
     )
     assigned_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,

@@ -1,9 +1,28 @@
 import { useState, useEffect } from 'react';
-import { Clock, Users, TrendingUp, Download, Calendar, Filter, Search } from 'lucide-react';
+import { Clock, Users, TrendingUp, Download, Calendar, Filter, Search, Monitor, Smartphone, Tablet } from 'lucide-react';
 import axios from 'axios';
 import { useAuthStore } from '../../stores/authStore';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+
+function DeviceInfo({ type, os, browser }) {
+  if (!type && !os && !browser) return <span className="text-gray-400">-</span>;
+
+  const DeviceIcon = type === 'Mobile' ? Smartphone : type === 'Tablet' ? Tablet : Monitor;
+  const deviceColor = type === 'Mobile' ? 'text-blue-500' : type === 'Tablet' ? 'text-purple-500' : 'text-gray-500';
+
+  return (
+    <div className="flex items-start gap-1.5 min-w-[120px]">
+      <DeviceIcon size={14} className={`${deviceColor} mt-0.5 shrink-0`} />
+      <div className="text-xs leading-tight">
+        {type && <div className="font-medium text-gray-700">{type}</div>}
+        {os && <div className="text-gray-500">{os}</div>}
+        {browser && <div className="text-gray-400">{browser}</div>}
+      </div>
+    </div>
+  );
+}
+
 
 export default function AttendanceManagementPage() {
   const { user: currentUser } = useAuthStore();
@@ -330,9 +349,11 @@ export default function AttendanceManagementPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Check In</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Check In Location</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Check In IP</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Check In Device</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Check Out</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Check Out Location</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Check Out IP</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Check Out Device</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Hours</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
               </tr>
@@ -340,13 +361,13 @@ export default function AttendanceManagementPage() {
             <tbody className="bg-white divide-y divide-gray-200">
               {loading ? (
                 <tr>
-                  <td colSpan="10" className="px-4 py-12 text-center text-gray-500">
+                  <td colSpan="12" className="px-4 py-12 text-center text-gray-500">
                     Loading...
                   </td>
                 </tr>
               ) : attendances.length === 0 ? (
                 <tr>
-                  <td colSpan="10" className="px-4 py-12 text-center text-gray-500">
+                  <td colSpan="12" className="px-4 py-12 text-center text-gray-500">
                     No attendance records found
                   </td>
                 </tr>
@@ -355,7 +376,7 @@ export default function AttendanceManagementPage() {
                   <>
                     {/* Date Header Row */}
                     <tr key={`date-${date}`} className="bg-gray-100">
-                      <td colSpan="10" className="px-4 py-2 text-sm font-semibold text-gray-700">
+                      <td colSpan="12" className="px-4 py-2 text-sm font-semibold text-gray-700">
                         {formatDate(date)} ({groupedAttendances[date].length} records)
                       </td>
                     </tr>
@@ -371,11 +392,17 @@ export default function AttendanceManagementPage() {
                           {attendance.check_in_address || attendance.check_in_location || '-'}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">{attendance.check_in_ip || '-'}</td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                          <DeviceInfo type={attendance.check_in_device_type} os={attendance.check_in_device_os} browser={attendance.check_in_device_browser} />
+                        </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm">{formatTime(attendance.check_out_time)}</td>
                         <td className="px-4 py-3 text-sm text-gray-600 max-w-xs truncate" title={attendance.check_out_address || attendance.check_out_location}>
                           {attendance.check_out_address || attendance.check_out_location || '-'}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">{attendance.check_out_ip || '-'}</td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">
+                          <DeviceInfo type={attendance.check_out_device_type} os={attendance.check_out_device_os} browser={attendance.check_out_device_browser} />
+                        </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm">{attendance.total_hours ? `${attendance.total_hours}h` : '-'}</td>
                         <td className="px-4 py-3 whitespace-nowrap">{getStatusBadge(attendance.status, attendance.is_late)}</td>
                       </tr>

@@ -76,6 +76,17 @@ export default function ProjectsPage() {
     await fetchProjects();
   };
 
+  const openEditForm = async (projectId) => {
+    try {
+      const detail = await projectsService.getProject(projectId);
+      setSelectedProject(detail);
+      setShowForm(true);
+    } catch (error) {
+      console.error('Error fetching project detail:', error);
+      toast.error('Failed to load project details');
+    }
+  };
+
   const filteredProjects = projects.filter((project) => {
     const matchesSearch = project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (project.client_name && project.client_name.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -118,8 +129,24 @@ export default function ProjectsPage() {
     {
       key: 'client_name',
       label: 'Client',
-      width: '15%',
+      width: '12%',
       render: (project) => project.client_name || '-'
+    },
+    {
+      key: 'departments',
+      label: 'Departments',
+      width: '15%',
+      render: (project) => (
+        <div className="flex flex-wrap gap-1">
+          {(project.department_names || []).map(name => (
+            <span key={name} className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-xs font-medium">{name}</span>
+          ))}
+          {(!project.department_names || project.department_names.length === 0) && (!project.member_count || project.member_count === 0) && '-'}
+          {project.member_count > 0 && (
+            <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">+{project.member_count} members</span>
+          )}
+        </div>
+      )
     },
     {
       key: 'status',
@@ -185,8 +212,7 @@ export default function ProjectsPage() {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  setSelectedProject(project);
-                  setShowForm(true);
+                  openEditForm(project.id);
                 }}
                 className="p-1.5 hover:bg-blue-100 rounded-lg transition-colors"
                 title="Edit"
@@ -348,8 +374,7 @@ export default function ProjectsPage() {
               key={project.id}
               project={project}
               onEdit={() => {
-                setSelectedProject(project);
-                setShowForm(true);
+                openEditForm(project.id);
               }}
               onDelete={() => {
                 setProjectToDelete(project);
@@ -473,6 +498,18 @@ function ProjectCard({ project, onEdit, onDelete, canEdit }) {
           <div className="flex items-center gap-2 text-xs text-gray-600">
             <Users className="h-3 w-3" />
             <span>{project.client_name}</span>
+          </div>
+        )}
+
+        {/* Departments & Members */}
+        {(project.department_names?.length > 0 || project.member_count > 0) && (
+          <div className="flex flex-wrap gap-1">
+            {(project.department_names || []).map(name => (
+              <span key={name} className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-xs font-medium">{name}</span>
+            ))}
+            {project.member_count > 0 && (
+              <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">+{project.member_count} members</span>
+            )}
           </div>
         )}
 

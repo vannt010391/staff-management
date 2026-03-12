@@ -141,14 +141,28 @@ class ChangePasswordView(generics.GenericAPIView):
 
 class UserViewSet(viewsets.ModelViewSet):
     """
-    API endpoints for User CRUD operations (Admin only)
+    API endpoints for User CRUD operations
+    - list/retrieve: any authenticated user (for assignee selection etc.)
+    - write actions: admin only
     """
     queryset = User.objects.all()
     serializer_class = UserSerializer
-    permission_classes = [IsAdmin]
+    permission_classes = [IsAuthenticated]
     filterset_fields = ['role', 'is_active']
     search_fields = ['username', 'email', 'first_name', 'last_name']
     ordering_fields = ['created_at', 'username']
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [IsAuthenticated()]
+        return [IsAdmin()]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.role == 'admin' or user.is_superuser:
+            return User.objects.all()
+        # Non-admins can see active users (for task assignment etc.)
+        return User.objects.filter(is_active=True)
 
     def get_serializer_class(self):
         if self.action == 'create':

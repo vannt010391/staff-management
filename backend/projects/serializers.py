@@ -1,5 +1,11 @@
 from rest_framework import serializers
 from .models import Project, Topic, DesignRule
+from hr.serializers import DepartmentSerializer
+from hr.models import Department
+from accounts.serializers import UserSerializer
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
 
 
 class DesignRuleSerializer(serializers.ModelSerializer):
@@ -41,6 +47,8 @@ class ProjectListSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     total_tasks = serializers.IntegerField(read_only=True)
     completed_tasks = serializers.IntegerField(read_only=True)
+    department_names = serializers.SerializerMethodField()
+    member_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Project
@@ -49,9 +57,16 @@ class ProjectListSerializer(serializers.ModelSerializer):
             'status', 'status_display', 'start_date', 'end_date',
             'created_by', 'created_by_username',
             'total_tasks', 'completed_tasks',
+            'department_names', 'member_count',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_by', 'created_at', 'updated_at']
+
+    def get_department_names(self, obj):
+        return list(obj.departments.values_list('name', flat=True))
+
+    def get_member_count(self, obj):
+        return obj.members.count()
 
     def to_representation(self, instance):
         """Hide budget field from staff users"""
@@ -76,6 +91,8 @@ class ProjectDetailSerializer(serializers.ModelSerializer):
     design_rules = DesignRuleSerializer(many=True, read_only=True)
     total_tasks = serializers.IntegerField(read_only=True)
     completed_tasks = serializers.IntegerField(read_only=True)
+    departments_details = DepartmentSerializer(source='departments', many=True, read_only=True)
+    members_details = serializers.SerializerMethodField()
 
     class Meta:
         model = Project
@@ -85,9 +102,17 @@ class ProjectDetailSerializer(serializers.ModelSerializer):
             'created_by', 'created_by_username',
             'topics', 'design_rules',
             'total_tasks', 'completed_tasks',
+            'departments', 'departments_details',
+            'members', 'members_details',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_by', 'created_at', 'updated_at']
+
+    def get_members_details(self, obj):
+        return [
+            {'id': u.id, 'username': u.username, 'full_name': u.get_full_name() or u.username, 'role': u.role}
+            for u in obj.members.all()
+        ]
 
     def to_representation(self, instance):
         """Hide budget field from staff users"""
@@ -103,12 +128,23 @@ class ProjectDetailSerializer(serializers.ModelSerializer):
 
 class ProjectCreateUpdateSerializer(serializers.ModelSerializer):
     """Serializer for creating/updating projects"""
+    departments = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=Department.objects.all(),
+        required=False
+    )
+    members = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=User.objects.all(),
+        required=False
+    )
 
     class Meta:
         model = Project
         fields = [
             'name', 'description', 'client_name', 'budget',
-            'status', 'start_date', 'end_date'
+            'status', 'start_date', 'end_date',
+            'departments', 'members'
         ]
 
     def validate(self, attrs):

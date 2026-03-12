@@ -1,7 +1,10 @@
 from rest_framework import serializers
 from django.utils import timezone
+from django.contrib.auth import get_user_model
 from .models import Task, TaskFile, TaskComment
 from projects.serializers import DesignRuleSerializer
+
+User = get_user_model()
 
 
 class TaskFileSerializer(serializers.ModelSerializer):
@@ -138,6 +141,7 @@ class TaskListSerializer(serializers.ModelSerializer):
     freelancer_earning = serializers.SerializerMethodField()
     resource_count = serializers.SerializerMethodField()
     upload_count = serializers.SerializerMethodField()
+    assignee_names = serializers.SerializerMethodField()
 
     class Meta:
         model = Task
@@ -147,6 +151,7 @@ class TaskListSerializer(serializers.ModelSerializer):
             'assigned_to', 'assigned_to_username', 'assigned_to_full_name',
             'assigned_by', 'assigned_by_username',
             'reviewer', 'reviewer_username', 'reviewer_full_name',
+            'assignees', 'assignee_names',
             'status', 'status_display', 'priority', 'priority_display',
             'price', 'due_date', 'is_overdue', 'freelancer_earning',
             'resource_count', 'upload_count',
@@ -174,6 +179,12 @@ class TaskListSerializer(serializers.ModelSerializer):
 
     def get_upload_count(self, obj):
         return obj.files.exclude(file_type='reference').count()
+
+    def get_assignee_names(self, obj):
+        return [
+            {'id': u.id, 'full_name': u.get_full_name() or u.username, 'username': u.username}
+            for u in obj.assignees.all()
+        ]
 
 
 class TaskDetailSerializer(serializers.ModelSerializer):
@@ -263,12 +274,17 @@ class TaskCreateUpdateSerializer(serializers.ModelSerializer):
         write_only=True,
         required=False
     )
+    assignees = serializers.PrimaryKeyRelatedField(
+        many=True,
+        required=False,
+        queryset=User.objects.all()
+    )
 
     class Meta:
         model = Task
         fields = [
             'title', 'description', 'project', 'topic',
-            'assigned_to', 'reviewer', 'status', 'priority', 'price', 'due_date',
+            'assigned_to', 'assignees', 'reviewer', 'status', 'priority', 'price', 'due_date',
             'design_rule_ids'
         ]
 
@@ -284,8 +300,9 @@ class TaskCreateUpdateSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
-        """Create task with design rules"""
+        """Create task with design rules and assignees"""
         design_rule_ids = validated_data.pop('design_rule_ids', [])
+        assignees = validated_data.pop('assignees', [])
         validated_data['assigned_by'] = self.context['request'].user
 
         # Auto-set started_at when status is 'working'
@@ -302,11 +319,16 @@ class TaskCreateUpdateSerializer(serializers.ModelSerializer):
         if design_rule_ids:
             task.design_rules.set(design_rule_ids)
 
+        # Add assignees
+        if assignees:
+            task.assignees.set(assignees)
+
         return task
 
     def update(self, instance, validated_data):
-        """Update task with design rules"""
+        """Update task with design rules and assignees"""
         design_rule_ids = validated_data.pop('design_rule_ids', None)
+        assignees = validated_data.pop('assignees', None)
 
         # Auto-set started_at when status changes to 'working'
         if validated_data.get('status') == 'working' and not instance.started_at:
@@ -324,6 +346,10 @@ class TaskCreateUpdateSerializer(serializers.ModelSerializer):
         # Update design rules if provided
         if design_rule_ids is not None:
             instance.design_rules.set(design_rule_ids)
+
+        # Update assignees if provided
+        if assignees is not None:
+            instance.assignees.set(assignees)
 
         return instance
 

@@ -335,7 +335,20 @@ export default function TasksPage() {
               key: 'assigned_to',
               label: 'Assigned To',
               width: '12%',
-              render: (task) => getTaskAssigneeName(task) || 'Unassigned'
+              render: (task) => {
+                if (task.assignee_names && task.assignee_names.length > 0) {
+                  return (
+                    <div className="flex flex-wrap gap-1">
+                      {task.assignee_names.map(a => (
+                        <span key={a.id} className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">
+                          {a.full_name || a.username}
+                        </span>
+                      ))}
+                    </div>
+                  );
+                }
+                return <span className="text-gray-400 text-xs">Unassigned</span>;
+              }
             },
             {
               key: 'reviewer',
@@ -617,14 +630,24 @@ function TaskCard({ task, index, onView, onEdit, onDelete, canEdit }) {
               </div>
             )}
 
-            {getTaskAssigneeName(task) && (
+            {(task.assignee_names?.length > 0 || getTaskAssigneeName(task)) && (
               <div className="flex items-start gap-3">
                 <div className="p-2 bg-purple-100 rounded-lg flex-shrink-0">
                   <User className="h-4 w-4 text-purple-600" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-gray-500 mb-0.5">Assigned To</p>
-                  <p className="font-semibold text-gray-900 text-sm">{getTaskAssigneeName(task)}</p>
+                  {task.assignee_names && task.assignee_names.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {task.assignee_names.map(a => (
+                        <span key={a.id} className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">
+                          {a.full_name || a.username}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="font-semibold text-gray-900 text-sm">{getTaskAssigneeName(task)}</p>
+                  )}
                 </div>
               </div>
             )}

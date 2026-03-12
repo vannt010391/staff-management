@@ -28,6 +28,11 @@ export const formatCurrency = (amount) => {
 
 export const getTaskAssigneeName = (task) => {
   if (!task) return '';
+  // New M2M assignees field
+  if (task.assignee_names && task.assignee_names.length > 0) {
+    return task.assignee_names.map(a => a.full_name || a.username).join(', ');
+  }
+  // Legacy FK field
   return task.assigned_to_name || task.assigned_to_username || task.assigned_to_full_name || '';
 };
 

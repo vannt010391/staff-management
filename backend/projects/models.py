@@ -45,6 +45,18 @@ class Project(models.Model):
         related_name='projects',
         help_text='Khách hàng của dự án'
     )
+    departments = models.ManyToManyField(
+        'hr.Department',
+        blank=True,
+        related_name='projects',
+        help_text='Departments có thể xem dự án này'
+    )
+    members = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name='member_projects',
+        help_text='Thành viên cá nhân tham gia dự án'
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
