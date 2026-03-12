@@ -1,9 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Plus, Edit, Trash2, Calendar, X } from 'lucide-react';
 import leaveService from '../../services/leaveService';
-import axios from 'axios';
-
-const API_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+import api from '../../services/api';
 
 export default function LeaveTypesPage() {
   const [leaveTypes, setLeaveTypes] = useState([]);
@@ -67,22 +65,13 @@ export default function LeaveTypesPage() {
     e.preventDefault();
 
     try {
-      const token = localStorage.getItem('access_token');
       if (editingType) {
         // Update existing
-        await axios.put(
-          `${API_URL}/hr/leave-types/${editingType.id}/`,
-          formData,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
+        await api.put(`/hr/leave-types/${editingType.id}/`, formData);
         alert('Leave type updated successfully!');
       } else {
         // Create new
-        await axios.post(
-          `${API_URL}/hr/leave-types/`,
-          formData,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
+        await api.post('/hr/leave-types/', formData);
         alert('Leave type created successfully!');
       }
       setShowModal(false);
@@ -96,10 +85,7 @@ export default function LeaveTypesPage() {
     if (!confirm('Are you sure you want to delete this leave type?')) return;
 
     try {
-      const token = localStorage.getItem('access_token');
-      await axios.delete(`${API_URL}/hr/leave-types/${id}/`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await api.delete(`/hr/leave-types/${id}/`);
       alert('Leave type deleted successfully!');
       loadLeaveTypes();
     } catch (err) {
