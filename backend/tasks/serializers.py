@@ -137,6 +137,7 @@ class TaskListSerializer(serializers.ModelSerializer):
     reviewer_full_name = serializers.SerializerMethodField()
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     priority_display = serializers.CharField(source='get_priority_display', read_only=True)
+    stage_display = serializers.CharField(source='get_stage_display', read_only=True)
     is_overdue = serializers.BooleanField(read_only=True)
     freelancer_earning = serializers.SerializerMethodField()
     resource_count = serializers.SerializerMethodField()
@@ -153,6 +154,7 @@ class TaskListSerializer(serializers.ModelSerializer):
             'reviewer', 'reviewer_username', 'reviewer_full_name',
             'assignees', 'assignee_names',
             'status', 'status_display', 'priority', 'priority_display',
+            'stage', 'stage_display',
             'price', 'due_date', 'is_overdue', 'freelancer_earning',
             'resource_count', 'upload_count',
             'created_at', 'updated_at'
@@ -207,6 +209,7 @@ class TaskDetailSerializer(serializers.ModelSerializer):
     reviewer_full_name = serializers.SerializerMethodField()
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     priority_display = serializers.CharField(source='get_priority_display', read_only=True)
+    stage_display = serializers.CharField(source='get_stage_display', read_only=True)
     design_rules = DesignRuleSerializer(many=True, read_only=True)
     files = TaskFileSerializer(many=True, read_only=True)
     comments = serializers.SerializerMethodField()
@@ -224,6 +227,7 @@ class TaskDetailSerializer(serializers.ModelSerializer):
             'assigned_by', 'assigned_by_username',
             'reviewer', 'reviewer_username', 'reviewer_full_name',
             'status', 'status_display', 'priority', 'priority_display',
+            'stage', 'stage_display',
             'price', 'due_date', 'is_overdue', 'freelancer_earning',
             'started_at', 'completed_at',
             'design_rules', 'files', 'resources', 'uploads', 'comments',
@@ -284,7 +288,7 @@ class TaskCreateUpdateSerializer(serializers.ModelSerializer):
         model = Task
         fields = [
             'title', 'description', 'project', 'topic',
-            'assigned_to', 'assignees', 'reviewer', 'status', 'priority', 'price', 'due_date',
+            'assigned_to', 'assignees', 'reviewer', 'status', 'priority', 'stage', 'price', 'due_date',
             'design_rule_ids'
         ]
 

@@ -24,6 +24,15 @@ class Task(models.Model):
         ('urgent', 'Urgent'),
     ]
 
+    STAGE_CHOICES = [
+        ('planning', 'Planning'),
+        ('design', 'Design'),
+        ('development', 'Development'),
+        ('review', 'Review'),
+        ('testing', 'Testing'),
+        ('completed', 'Completed'),
+    ]
+
     # Basic Info
     title = models.CharField(max_length=200, help_text='Tiêu đề task')
     description = models.TextField(blank=True, default='', help_text='Mô tả chi tiết task')
@@ -88,6 +97,12 @@ class Task(models.Model):
         choices=PRIORITY_CHOICES,
         default='medium',
         help_text='Độ ưu tiên'
+    )
+    stage = models.CharField(
+        max_length=20,
+        choices=STAGE_CHOICES,
+        default='planning',
+        help_text='Giai đoạn thực hiện task'
     )
     price = models.DecimalField(
         max_digits=10,

@@ -64,6 +64,34 @@ export const TASK_PRIORITY_COLORS = {
   [TASK_PRIORITY.URGENT]: 'bg-red-100 text-red-800',
 };
 
+// Task Stage
+export const TASK_STAGE = {
+  PLANNING: 'planning',
+  DESIGN: 'design',
+  DEVELOPMENT: 'development',
+  REVIEW: 'review',
+  TESTING: 'testing',
+  COMPLETED: 'completed',
+};
+
+export const TASK_STAGE_LABELS = {
+  [TASK_STAGE.PLANNING]: 'Planning',
+  [TASK_STAGE.DESIGN]: 'Design',
+  [TASK_STAGE.DEVELOPMENT]: 'Development',
+  [TASK_STAGE.REVIEW]: 'Review',
+  [TASK_STAGE.TESTING]: 'Testing',
+  [TASK_STAGE.COMPLETED]: 'Completed',
+};
+
+export const TASK_STAGE_COLORS = {
+  [TASK_STAGE.PLANNING]: 'bg-gray-100 text-gray-700',
+  [TASK_STAGE.DESIGN]: 'bg-purple-100 text-purple-700',
+  [TASK_STAGE.DEVELOPMENT]: 'bg-blue-100 text-blue-700',
+  [TASK_STAGE.REVIEW]: 'bg-orange-100 text-orange-700',
+  [TASK_STAGE.TESTING]: 'bg-yellow-100 text-yellow-700',
+  [TASK_STAGE.COMPLETED]: 'bg-green-100 text-green-700',
+};
+
 // Project Status
 export const PROJECT_STATUS = {
   ACTIVE: 'active',

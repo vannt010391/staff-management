@@ -17,13 +17,15 @@ import {
   Trash2,
   Loader2,
   ListTodo,
+  Eye,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import projectsService from '../services/projects';
 import tasksService from '../services/tasks';
 import TaskForm from '../components/tasks/TaskForm';
 import TaskImportModal from '../components/tasks/TaskImportModal';
-import { TASK_STATUS_LABELS, TASK_PRIORITY_LABELS } from '../constants';
+import TaskDetailModal from '../components/tasks/TaskDetailModal';
+import { TASK_STATUS_LABELS, TASK_PRIORITY_LABELS, TASK_STAGE_LABELS } from '../constants';
 import { formatCurrency, getTaskAssigneeName } from '../utils/helpers';
 import { RichTextEditor } from '../components/ui';
 
@@ -41,6 +43,8 @@ export default function ProjectDetail() {
   const [taskFilterStatus, setTaskFilterStatus] = useState('all');
   const [taskFilterPriority, setTaskFilterPriority] = useState('all');
   const [taskFilterAssignee, setTaskFilterAssignee] = useState('all');
+  const [showTaskDetail, setShowTaskDetail] = useState(false);
+  const [taskToView, setTaskToView] = useState(null);
 
   const [showRuleForm, setShowRuleForm] = useState(false);
   const [selectedRule, setSelectedRule] = useState(null);
@@ -204,6 +208,18 @@ export default function ProjectDetail() {
       urgent: 'text-red-600',
     };
     return colors[priority] || 'text-gray-600';
+  };
+
+  const getTaskStageColor = (stage) => {
+    const colors = {
+      planning: 'bg-gray-100 text-gray-700',
+      design: 'bg-purple-100 text-purple-700',
+      development: 'bg-blue-100 text-blue-700',
+      review: 'bg-orange-100 text-orange-700',
+      testing: 'bg-yellow-100 text-yellow-700',
+      completed: 'bg-green-100 text-green-700',
+    };
+    return colors[stage] || 'bg-gray-100 text-gray-700';
   };
 
   const taskStats = {
@@ -445,7 +461,7 @@ export default function ProjectDetail() {
           </div>
         </div>
 
-        <div className="p-6">
+        <div className="overflow-x-auto">
           {tasks.length === 0 ? (
             <div className="text-center py-12">
               <ListTodo className="h-16 w-16 text-gray-400 mx-auto mb-4" />
@@ -469,71 +485,92 @@ export default function ProjectDetail() {
               <p className="text-gray-600 mb-6">Try changing status or priority filter</p>
             </div>
           ) : (
-            <div className="space-y-4">
-              {filteredTasks.map((task) => (
-                <div
-                  key={task.id}
-                  className="bg-white rounded-xl p-4 border border-gray-200 hover:shadow-md transition-all"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h3 className="text-lg font-bold text-gray-900">{task.title}</h3>
-                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${getTaskStatusColor(task.status)}`}>
-                          {TASK_STATUS_LABELS[task.status] || 'New'}
-                        </span>
-                        <span className={`text-sm font-semibold ${getPriorityColor(task.priority)}`}>
-                          {TASK_PRIORITY_LABELS[task.priority] || 'Medium'}
-                        </span>
+            <table className="w-full">
+              <thead>
+                <tr className="bg-gradient-to-r from-blue-50 to-purple-50 border-b-2 border-blue-200">
+                  <th className="px-4 py-3 text-left text-sm font-bold text-gray-900">Title</th>
+                  <th className="px-4 py-3 text-left text-sm font-bold text-gray-900">Status</th>
+                  <th className="px-4 py-3 text-left text-sm font-bold text-gray-900">Stage</th>
+                  <th className="px-4 py-3 text-left text-sm font-bold text-gray-900">Priority</th>
+                  <th className="px-4 py-3 text-left text-sm font-bold text-gray-900">Assignee</th>
+                  <th className="px-4 py-3 text-left text-sm font-bold text-gray-900">Due Date</th>
+                  <th className="px-4 py-3 text-left text-sm font-bold text-gray-900">Price</th>
+                  <th className="px-4 py-3 text-center text-sm font-bold text-gray-900">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {filteredTasks.map((task) => (
+                  <tr key={task.id} className="hover:bg-blue-50/50 transition-colors">
+                    <td className="px-4 py-3">
+                      <div className="font-semibold text-gray-900">{task.title}</div>
+                      {task.description && (
+                        <div className="text-xs text-gray-500 truncate max-w-xs">
+                          {task.description}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`px-2 py-1 rounded-full text-xs font-semibold ${getTaskStatusColor(task.status)}`}>
+                        {TASK_STATUS_LABELS[task.status] || task.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`px-2 py-1 rounded-full text-xs font-semibold ${getTaskStageColor(task.stage)}`}>
+                        {TASK_STAGE_LABELS[task.stage] || task.stage}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`text-sm font-semibold ${getPriorityColor(task.priority)}`}>
+                        {TASK_PRIORITY_LABELS[task.priority] || task.priority}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-700">
+                      {getTaskAssigneeName(task) || '-'}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-700">
+                      {task.due_date ? new Date(task.due_date).toLocaleDateString() : '-'}
+                    </td>
+                    <td className="px-4 py-3 text-sm font-semibold text-gray-900">
+                      {task.price ? formatCurrency(Number(task.price)) : '-'}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          onClick={() => {
+                            setTaskToView(task);
+                            setShowTaskDetail(true);
+                          }}
+                          className="p-2 hover:bg-green-100 rounded-lg transition-colors"
+                          title="View Details"
+                        >
+                          <Eye className="h-4 w-4 text-green-600" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedTask(task);
+                            setShowTaskForm(true);
+                          }}
+                          className="p-2 hover:bg-blue-100 rounded-lg transition-colors"
+                          title="Edit"
+                        >
+                          <Edit className="h-4 w-4 text-blue-600" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setTaskToDelete(task);
+                            setShowDeleteConfirm(true);
+                          }}
+                          className="p-2 hover:bg-red-100 rounded-lg transition-colors"
+                          title="Delete"
+                        >
+                          <Trash2 className="h-4 w-4 text-red-600" />
+                        </button>
                       </div>
-                      <p className="text-sm text-gray-600 mb-3">{task.description}</p>
-                      <div className="flex items-center gap-4 text-sm text-gray-600">
-                        {getTaskAssigneeName(task) && (
-                          <div className="flex items-center gap-2">
-                            <Users className="h-4 w-4" />
-                            <span>{getTaskAssigneeName(task)}</span>
-                          </div>
-                        )}
-                        {task.due_date && (
-                          <div className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4" />
-                            <span>{new Date(task.due_date).toLocaleDateString()}</span>
-                          </div>
-                        )}
-                        {task.price && (
-                          <div className="flex items-center gap-2">
-                            <DollarSign className="h-4 w-4" />
-                            <span>{formatCurrency(Number(task.price))}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => {
-                          setSelectedTask(task);
-                          setShowTaskForm(true);
-                        }}
-                        className="p-2 hover:bg-blue-100 rounded-lg transition-colors"
-                        title="Edit"
-                      >
-                        <Edit className="h-4 w-4 text-blue-600" />
-                      </button>
-                      <button
-                        onClick={() => {
-                          setTaskToDelete(task);
-                          setShowDeleteConfirm(true);
-                        }}
-                        className="p-2 hover:bg-red-100 rounded-lg transition-colors"
-                        title="Delete"
-                      >
-                        <Trash2 className="h-4 w-4 text-red-600" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
         </div>
       </div>
@@ -806,6 +843,17 @@ export default function ProjectDetail() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Task Detail Modal */}
+      {showTaskDetail && taskToView && (
+        <TaskDetailModal
+          task={taskToView}
+          onClose={() => {
+            setShowTaskDetail(false);
+            setTaskToView(null);
+          }}
+        />
       )}
     </div>
   );
