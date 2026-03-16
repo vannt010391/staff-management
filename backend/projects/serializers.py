@@ -45,9 +45,9 @@ class ProjectListSerializer(serializers.ModelSerializer):
         read_only=True
     )
     status_display = serializers.CharField(source='get_status_display', read_only=True)
-    total_tasks = serializers.IntegerField(read_only=True)
-    completed_tasks = serializers.IntegerField(read_only=True)
-    progress = serializers.FloatField(read_only=True)
+    total_tasks = serializers.SerializerMethodField()
+    completed_tasks = serializers.SerializerMethodField()
+    progress = serializers.SerializerMethodField()
     department_names = serializers.SerializerMethodField()
     member_count = serializers.SerializerMethodField()
 
@@ -62,6 +62,15 @@ class ProjectListSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_by', 'created_at', 'updated_at']
+
+    def get_total_tasks(self, obj):
+        return obj.total_tasks
+
+    def get_completed_tasks(self, obj):
+        return obj.completed_tasks
+
+    def get_progress(self, obj):
+        return obj.progress
 
     def get_department_names(self, obj):
         return list(obj.departments.values_list('name', flat=True))
@@ -90,9 +99,9 @@ class ProjectDetailSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     topics = TopicSerializer(many=True, read_only=True)
     design_rules = DesignRuleSerializer(many=True, read_only=True)
-    total_tasks = serializers.IntegerField(read_only=True)
-    completed_tasks = serializers.IntegerField(read_only=True)
-    progress = serializers.FloatField(read_only=True)
+    total_tasks = serializers.SerializerMethodField()
+    completed_tasks = serializers.SerializerMethodField()
+    progress = serializers.SerializerMethodField()
     departments_details = DepartmentSerializer(source='departments', many=True, read_only=True)
     members_details = serializers.SerializerMethodField()
 
@@ -109,6 +118,15 @@ class ProjectDetailSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_by', 'created_at', 'updated_at']
+
+    def get_total_tasks(self, obj):
+        return obj.total_tasks
+
+    def get_completed_tasks(self, obj):
+        return obj.completed_tasks
+
+    def get_progress(self, obj):
+        return obj.progress
 
     def get_members_details(self, obj):
         return [
