@@ -47,6 +47,7 @@ class ProjectListSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     total_tasks = serializers.IntegerField(read_only=True)
     completed_tasks = serializers.IntegerField(read_only=True)
+    progress = serializers.FloatField(read_only=True)
     department_names = serializers.SerializerMethodField()
     member_count = serializers.SerializerMethodField()
 
@@ -56,7 +57,7 @@ class ProjectListSerializer(serializers.ModelSerializer):
             'id', 'name', 'description', 'client_name', 'budget',
             'status', 'status_display', 'start_date', 'end_date',
             'created_by', 'created_by_username',
-            'total_tasks', 'completed_tasks',
+            'total_tasks', 'completed_tasks', 'progress',
             'department_names', 'member_count',
             'created_at', 'updated_at'
         ]
@@ -91,6 +92,7 @@ class ProjectDetailSerializer(serializers.ModelSerializer):
     design_rules = DesignRuleSerializer(many=True, read_only=True)
     total_tasks = serializers.IntegerField(read_only=True)
     completed_tasks = serializers.IntegerField(read_only=True)
+    progress = serializers.FloatField(read_only=True)
     departments_details = DepartmentSerializer(source='departments', many=True, read_only=True)
     members_details = serializers.SerializerMethodField()
 
@@ -101,7 +103,7 @@ class ProjectDetailSerializer(serializers.ModelSerializer):
             'status', 'status_display', 'start_date', 'end_date',
             'created_by', 'created_by_username',
             'topics', 'design_rules',
-            'total_tasks', 'completed_tasks',
+            'total_tasks', 'completed_tasks', 'progress',
             'departments', 'departments_details',
             'members', 'members_details',
             'created_at', 'updated_at'

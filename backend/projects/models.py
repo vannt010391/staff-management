@@ -78,6 +78,15 @@ class Project(models.Model):
         """Số tasks đã hoàn thành"""
         return self.tasks.filter(status='completed').count()
 
+    @property
+    def progress(self):
+        """Tính % tiến độ hoàn thành dự án"""
+        total = self.total_tasks
+        if total == 0:
+            return 0
+        completed = self.completed_tasks
+        return round((completed / total) * 100, 2)
+
 
 class Topic(models.Model):
     """
