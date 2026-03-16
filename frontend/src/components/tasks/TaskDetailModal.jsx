@@ -1,4 +1,7 @@
-import { X, Calendar, Users, DollarSign, Clock, Tag, FileText, CheckCircle, AlertCircle, Target, Flag, TrendingUp } from 'lucide-react';
+import { useState } from 'react';
+import { X, Calendar, Users, DollarSign, Clock, Tag, FileText, CheckCircle, AlertCircle, Target, Flag, TrendingUp, Save } from 'lucide-react';
+import { toast } from 'sonner';
+import tasksService from '../../services/tasks';
 import { TASK_STATUS_LABELS, TASK_PRIORITY_LABELS, TASK_STAGE_LABELS } from '../../constants';
 import { formatCurrency, getTaskAssigneeName } from '../../utils/helpers';
 
@@ -12,7 +15,62 @@ const InfoRow = ({ icon: Icon, label, value, colorClass = 'text-gray-900' }) => 
   </div>
 );
 
-export default function TaskDetailModal({ task, onClose }) {
+const StageProgressItem = ({ stageName, stageLabel, status, onUpdate }) => {
+  const getStatusColor = (status) => {
+    const colors = {
+      not_started: 'bg-gray-100 text-gray-600 border-gray-300',
+      in_progress: 'bg-blue-100 text-blue-700 border-blue-300',
+      completed: 'bg-green-100 text-green-700 border-green-300',
+    };
+    return colors[status] || 'bg-gray-100 text-gray-600 border-gray-300';
+  };
+
+  const getStatusIcon = (status) => {
+    if (status === 'completed') return '✅';
+    if (status === 'in_progress') return '⚙️';
+    return '⏳';
+  };
+
+  const statuses = [
+    { value: 'not_started', label: 'Not Started' },
+    { value: 'in_progress', label: 'In Progress' },
+    { value: 'completed', label: 'Completed' },
+  ];
+
+  return (
+    <div className="flex items-center gap-3 p-3 bg-white rounded-lg border-2 border-gray-200 hover:border-blue-300 transition-all">
+      <div className="flex-1">
+        <div className="font-semibold text-gray-900 mb-1">{stageLabel}</div>
+        <select
+          value={status || 'not_started'}
+          onChange={(e) => onUpdate(stageName, e.target.value)}
+          className={`px-3 py-1 rounded-lg text-sm font-medium border-2 ${getStatusColor(status)} cursor-pointer hover:opacity-80 transition-opacity`}
+        >
+          {statuses.map((s) => (
+            <option key={s.value} value={s.value}>
+              {getStatusIcon(s.value)} {s.label}
+            </option>
+          ))}
+        </select>
+      </div>
+    </div>
+  );
+};
+
+export default function TaskDetailModal({ task: initialTask, onClose, onUpdate }) {
+  const [task, setTask] = useState(initialTask);
+  const [stageProgress, setStageProgress] = useState(
+    task.stage_progress || {
+      planning: 'not_started',
+      design: 'not_started',
+      development: 'not_started',
+      review: 'not_started',
+      testing: 'not_started',
+      completed: 'not_started',
+    }
+  );
+  const [saving, setSaving] = useState(false);
+
   if (!task) return null;
 
   const getStatusColor = (status) => {
@@ -57,6 +115,43 @@ export default function TaskDetailModal({ task, onClose }) {
     return getTaskAssigneeName(task) || 'Unassigned';
   };
 
+  const handleStageProgressUpdate = (stageName, status) => {
+    setStageProgress(prev => ({
+      ...prev,
+      [stageName]: status,
+    }));
+  };
+
+  const handleSaveStageProgress = async () => {
+    try {
+      setSaving(true);
+      await tasksService.updateStageProgress(task.id, stageProgress);
+      toast.success('Stage progress updated successfully');
+
+      // Update local task state
+      setTask(prev => ({ ...prev, stage_progress: stageProgress }));
+
+      // Notify parent component if callback provided
+      if (onUpdate) {
+        onUpdate();
+      }
+    } catch (error) {
+      console.error('Error updating stage progress:', error);
+      toast.error('Failed to update stage progress');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const calculateOverallProgress = () => {
+    const stages = Object.values(stageProgress);
+    const completedCount = stages.filter(s => s === 'completed').length;
+    const inProgressCount = stages.filter(s => s === 'in_progress').length;
+    const totalStages = stages.length;
+
+    return Math.round(((completedCount + (inProgressCount * 0.5)) / totalStages) * 100);
+  };
+
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
@@ -79,6 +174,9 @@ export default function TaskDetailModal({ task, onClose }) {
                   ⚠️ OVERDUE
                 </span>
               )}
+              <span className="px-3 py-1 rounded-full text-xs font-bold bg-white/30 text-white">
+                📈 {calculateOverallProgress()}% Complete
+              </span>
             </div>
           </div>
           <button
@@ -101,6 +199,62 @@ export default function TaskDetailModal({ task, onClose }) {
               <p className="text-gray-700 whitespace-pre-wrap">
                 {task.description || 'No description provided'}
               </p>
+            </div>
+          </div>
+
+          {/* Stage Progress Management */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-blue-600" />
+                Stage Progress Tracking
+              </h3>
+              <button
+                onClick={handleSaveStageProgress}
+                disabled={saving}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2 shadow-lg"
+              >
+                <Save className="h-4 w-4" />
+                {saving ? 'Saving...' : 'Save Progress'}
+              </button>
+            </div>
+            <div className="bg-gradient-to-br from-blue-50 to-purple-50 p-4 rounded-lg space-y-3">
+              <StageProgressItem
+                stageName="planning"
+                stageLabel="📋 Planning"
+                status={stageProgress.planning}
+                onUpdate={handleStageProgressUpdate}
+              />
+              <StageProgressItem
+                stageName="design"
+                stageLabel="🎨 Design"
+                status={stageProgress.design}
+                onUpdate={handleStageProgressUpdate}
+              />
+              <StageProgressItem
+                stageName="development"
+                stageLabel="💻 Development"
+                status={stageProgress.development}
+                onUpdate={handleStageProgressUpdate}
+              />
+              <StageProgressItem
+                stageName="review"
+                stageLabel="🔍 Review"
+                status={stageProgress.review}
+                onUpdate={handleStageProgressUpdate}
+              />
+              <StageProgressItem
+                stageName="testing"
+                stageLabel="🧪 Testing"
+                status={stageProgress.testing}
+                onUpdate={handleStageProgressUpdate}
+              />
+              <StageProgressItem
+                stageName="completed"
+                stageLabel="✨ Completed"
+                status={stageProgress.completed}
+                onUpdate={handleStageProgressUpdate}
+              />
             </div>
           </div>
 
@@ -132,7 +286,7 @@ export default function TaskDetailModal({ task, onClose }) {
 
               <InfoRow
                 icon={TrendingUp}
-                label="Stage"
+                label="Current Stage"
                 value={TASK_STAGE_LABELS[task.stage] || task.stage}
                 colorClass="text-purple-600"
               />
@@ -278,57 +432,6 @@ export default function TaskDetailModal({ task, onClose }) {
               </div>
             </div>
           )}
-
-          {/* Stage Progress */}
-          <div>
-            <h3 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-blue-600" />
-              Stage Progress
-            </h3>
-            <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-4 rounded-lg">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="flex-1 bg-gray-200 rounded-full h-3 overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all ${
-                      task.stage === 'planning' ? 'w-1/6 bg-gray-400' :
-                      task.stage === 'design' ? 'w-2/6 bg-purple-400' :
-                      task.stage === 'development' ? 'w-3/6 bg-blue-400' :
-                      task.stage === 'review' ? 'w-4/6 bg-orange-400' :
-                      task.stage === 'testing' ? 'w-5/6 bg-yellow-400' :
-                      'w-full bg-green-400'
-                    }`}
-                  />
-                </div>
-                <span className="text-sm font-bold text-gray-700">
-                  {task.stage === 'planning' ? '17%' :
-                   task.stage === 'design' ? '33%' :
-                   task.stage === 'development' ? '50%' :
-                   task.stage === 'review' ? '67%' :
-                   task.stage === 'testing' ? '83%' : '100%'}
-                </span>
-              </div>
-              <div className="grid grid-cols-6 gap-1 text-xs mt-2">
-                <div className={`text-center p-1 rounded ${task.stage === 'planning' ? 'bg-gray-200 font-bold' : 'text-gray-500'}`}>
-                  Planning
-                </div>
-                <div className={`text-center p-1 rounded ${task.stage === 'design' ? 'bg-purple-200 font-bold' : 'text-gray-500'}`}>
-                  Design
-                </div>
-                <div className={`text-center p-1 rounded ${task.stage === 'development' ? 'bg-blue-200 font-bold' : 'text-gray-500'}`}>
-                  Dev
-                </div>
-                <div className={`text-center p-1 rounded ${task.stage === 'review' ? 'bg-orange-200 font-bold' : 'text-gray-500'}`}>
-                  Review
-                </div>
-                <div className={`text-center p-1 rounded ${task.stage === 'testing' ? 'bg-yellow-200 font-bold' : 'text-gray-500'}`}>
-                  Testing
-                </div>
-                <div className={`text-center p-1 rounded ${task.stage === 'completed' ? 'bg-green-200 font-bold' : 'text-gray-500'}`}>
-                  Done
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* Footer */}

@@ -114,6 +114,37 @@ class Topic(models.Model):
         return f"{self.project.name} - {self.name}"
 
 
+class ProjectStage(models.Model):
+    """
+    Model để quản lý stages cho dự án
+    """
+    name = models.CharField(max_length=100, help_text='Tên stage')
+    description = models.TextField(blank=True, help_text='Mô tả stage')
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name='stages',
+        help_text='Dự án chứa stage này'
+    )
+    order = models.IntegerField(default=0, help_text='Thứ tự sắp xếp')
+    color = models.CharField(
+        max_length=20,
+        default='gray',
+        help_text='Màu hiển thị (gray, blue, purple, orange, yellow, green, red)'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Project Stage'
+        verbose_name_plural = 'Project Stages'
+        ordering = ['project', 'order', 'created_at']
+        unique_together = ['project', 'name']
+
+    def __str__(self):
+        return f"{self.project.name} - {self.name}"
+
+
 class DesignRule(models.Model):
     """
     Model để quản lý quy tắc thiết kế cho dự án

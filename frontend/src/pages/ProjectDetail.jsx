@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
-  FolderKanban,
   ArrowLeft,
   Plus,
   Upload,
@@ -18,16 +17,208 @@ import {
   Loader2,
   ListTodo,
   Eye,
+  LayoutGrid,
+  List,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  DndContext,
+  DragOverlay,
+  closestCorners,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDroppable,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import projectsService from '../services/projects';
 import tasksService from '../services/tasks';
 import TaskForm from '../components/tasks/TaskForm';
 import TaskImportModal from '../components/tasks/TaskImportModal';
-import TaskDetailModal from '../components/tasks/TaskDetailModal';
 import { TASK_STATUS_LABELS, TASK_PRIORITY_LABELS, TASK_STAGE_LABELS } from '../constants';
 import { formatCurrency, getTaskAssigneeName } from '../utils/helpers';
 import { RichTextEditor } from '../components/ui';
+
+// Helper function for stage colors
+const getStageColorClass = (color) => {
+  const colors = {
+    gray: 'bg-gray-100 text-gray-700 border-gray-300',
+    blue: 'bg-blue-100 text-blue-700 border-blue-300',
+    purple: 'bg-purple-100 text-purple-700 border-purple-300',
+    orange: 'bg-orange-100 text-orange-700 border-orange-300',
+    yellow: 'bg-yellow-100 text-yellow-700 border-yellow-300',
+    green: 'bg-green-100 text-green-700 border-green-300',
+    red: 'bg-red-100 text-red-700 border-red-300',
+  };
+  return colors[color] || 'bg-gray-100 text-gray-700 border-gray-300';
+};
+
+// Kanban Task Card Component
+function TaskCard({ task, onView, onEdit }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: task.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  const getPriorityColor = (priority) => {
+    const colors = {
+      low: 'text-gray-600 bg-gray-100',
+      medium: 'text-blue-600 bg-blue-100',
+      high: 'text-orange-600 bg-orange-100',
+      urgent: 'text-red-600 bg-red-100',
+    };
+    return colors[priority] || 'text-gray-600 bg-gray-100';
+  };
+
+  const getStatusColor = (status) => {
+    const colors = {
+      new: 'bg-gray-100 text-gray-800',
+      assigned: 'bg-blue-100 text-blue-800',
+      working: 'bg-orange-100 text-orange-800',
+      review_pending: 'bg-purple-100 text-purple-800',
+      approved: 'bg-green-100 text-green-800',
+      rejected: 'bg-red-100 text-red-800',
+      completed: 'bg-indigo-100 text-indigo-800',
+    };
+    return colors[status] || 'bg-gray-100 text-gray-800';
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className="bg-white rounded-lg p-3 mb-2 shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-move"
+    >
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <h4 className="font-semibold text-sm text-gray-900 line-clamp-2">{task.title}</h4>
+        <div className="flex gap-1 flex-shrink-0">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onView(task);
+            }}
+            className="p-1 hover:bg-green-100 rounded transition-colors"
+            title="View"
+          >
+            <Eye className="h-3 w-3 text-green-600" />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit(task);
+            }}
+            className="p-1 hover:bg-blue-100 rounded transition-colors"
+            title="Edit"
+          >
+            <Edit className="h-3 w-3 text-blue-600" />
+          </button>
+        </div>
+      </div>
+
+      {task.description && (
+        <p className="text-xs text-gray-600 mb-2 line-clamp-2">{task.description}</p>
+      )}
+
+      <div className="flex flex-wrap gap-1 mb-2">
+        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(task.status)}`}>
+          {TASK_STATUS_LABELS[task.status] || task.status}
+        </span>
+        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getPriorityColor(task.priority)}`}>
+          {TASK_PRIORITY_LABELS[task.priority] || task.priority}
+        </span>
+      </div>
+
+      <div className="flex items-center justify-between text-xs text-gray-500">
+        <div className="flex items-center gap-1">
+          <Users className="h-3 w-3" />
+          <span>{getTaskAssigneeName(task) || 'Unassigned'}</span>
+        </div>
+        {task.due_date && (
+          <div className={`flex items-center gap-1 ${task.is_overdue ? 'text-red-600' : ''}`}>
+            <Calendar className="h-3 w-3" />
+            <span>{new Date(task.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+          </div>
+        )}
+      </div>
+
+      {task.price && (
+        <div className="mt-2 pt-2 border-t border-gray-100 text-xs font-semibold text-green-600">
+          {formatCurrency(Number(task.price))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Kanban Column Component
+function KanbanColumn({ stage, tasks, onView, onEdit }) {
+  const {
+    setNodeRef,
+    isOver,
+  } = useDroppable({
+    id: stage ? `stage-${stage.id}` : 'stage-no-stage',
+    data: {
+      type: 'column',
+      stage,
+    },
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`flex-shrink-0 w-80 bg-gray-50 rounded-xl p-4 transition-all ${
+        stage ? `border-2 ${getStageColorClass(stage.color)}` : 'border-2 border-dashed border-gray-300'
+      } ${isOver ? 'ring-2 ring-blue-400 ring-offset-2' : ''}`}
+    >
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-bold text-gray-900">
+          {stage ? stage.name : 'No Stage'}
+        </h3>
+        <span className="px-2 py-1 bg-white rounded-full text-xs font-medium text-gray-600">
+          {tasks.length}
+        </span>
+      </div>
+
+      <SortableContext items={tasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+        <div className="space-y-2 min-h-[100px]">
+          {tasks.length === 0 ? (
+            <div className="text-center py-8 text-gray-400 text-sm">
+              Drop tasks here
+            </div>
+          ) : (
+            tasks.map((task) => (
+              <TaskCard
+                key={task.id}
+                task={task}
+                onView={onView}
+                onEdit={onEdit}
+              />
+            ))
+          )}
+        </div>
+      </SortableContext>
+    </div>
+  );
+}
 
 export default function ProjectDetail() {
   const { id } = useParams();
@@ -43,8 +234,6 @@ export default function ProjectDetail() {
   const [taskFilterStatus, setTaskFilterStatus] = useState('all');
   const [taskFilterPriority, setTaskFilterPriority] = useState('all');
   const [taskFilterAssignee, setTaskFilterAssignee] = useState('all');
-  const [showTaskDetail, setShowTaskDetail] = useState(false);
-  const [taskToView, setTaskToView] = useState(null);
 
   const [showRuleForm, setShowRuleForm] = useState(false);
   const [selectedRule, setSelectedRule] = useState(null);
@@ -60,6 +249,28 @@ export default function ProjectDetail() {
   const [ruleToDelete, setRuleToDelete] = useState(null);
   const [ruleFilterCategory, setRuleFilterCategory] = useState('all');
   const [ruleFilterRequired, setRuleFilterRequired] = useState('all');
+
+  const [showStageForm, setShowStageForm] = useState(false);
+  const [selectedStage, setSelectedStage] = useState(null);
+  const [stageFormData, setStageFormData] = useState({
+    name: '',
+    description: '',
+    color: 'blue',
+    order: 0,
+  });
+  const [stageSaving, setStageSaving] = useState(false);
+  const [showStageDeleteConfirm, setShowStageDeleteConfirm] = useState(false);
+  const [stageToDelete, setStageToDelete] = useState(null);
+
+  const [viewMode, setViewMode] = useState('table'); // 'table' or 'kanban'
+  const [activeTaskId, setActiveTaskId] = useState(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   useEffect(() => {
     fetchProjectAndTasks();
@@ -177,15 +388,116 @@ export default function ProjectDetail() {
     }
   };
 
-  const _getStatusColor = (status) => {
-    const colors = {
-      planning: 'bg-gray-100 text-gray-800',
-      active: 'bg-blue-100 text-blue-800',
-      on_hold: 'bg-yellow-100 text-yellow-800',
-      completed: 'bg-green-100 text-green-800',
-      cancelled: 'bg-red-100 text-red-800',
-    };
-    return colors[status] || 'bg-gray-100 text-gray-800';
+  const openCreateStageForm = () => {
+    setSelectedStage(null);
+    setStageFormData({
+      name: '',
+      description: '',
+      color: 'blue',
+      order: 0,
+    });
+    setShowStageForm(true);
+  };
+
+  const openEditStageForm = (stage) => {
+    setSelectedStage(stage);
+    setStageFormData({
+      name: stage.name || '',
+      description: stage.description || '',
+      color: stage.color || 'blue',
+      order: stage.order || 0,
+    });
+    setShowStageForm(true);
+  };
+
+  const handleStageSubmit = async (e) => {
+    e.preventDefault();
+    if (!stageFormData.name.trim()) {
+      toast.error('Stage name is required');
+      return;
+    }
+
+    try {
+      setStageSaving(true);
+      const payload = {
+        name: stageFormData.name.trim(),
+        description: stageFormData.description.trim(),
+        color: stageFormData.color,
+        order: Number(stageFormData.order || 0),
+        project: Number(project.id),
+      };
+
+      if (selectedStage) {
+        await projectsService.updateStage(selectedStage.id, payload);
+        toast.success('Stage updated successfully');
+      } else {
+        await projectsService.createStage(payload);
+        toast.success('Stage created successfully');
+      }
+
+      setShowStageForm(false);
+      await fetchProjectAndTasks();
+    } catch (error) {
+      console.error('Error saving stage:', error);
+      toast.error(error.response?.data?.detail || 'Failed to save stage');
+    } finally {
+      setStageSaving(false);
+    }
+  };
+
+  const handleDeleteStage = async () => {
+    if (!stageToDelete) return;
+
+    try {
+      await projectsService.deleteStage(stageToDelete.id);
+      toast.success('Stage deleted successfully');
+      setShowStageDeleteConfirm(false);
+      setStageToDelete(null);
+      await fetchProjectAndTasks();
+    } catch (error) {
+      console.error('Error deleting stage:', error);
+      toast.error('Failed to delete stage');
+    }
+  };
+
+  const handleDragStart = (event) => {
+    setActiveTaskId(event.active.id);
+  };
+
+  const handleDragEnd = async (event) => {
+    const { active, over } = event;
+    setActiveTaskId(null);
+
+    if (!over) return;
+
+    const taskId = active.id;
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    let newStageId = null;
+
+    // Check if dropped over a column
+    if (over.data.current?.type === 'column') {
+      newStageId = over.data.current.stage?.id || null;
+    } else {
+      // Dropped over a task, find which stage it belongs to
+      const overTask = tasks.find(t => t.id === over.id);
+      if (overTask) {
+        newStageId = overTask.project_stage || null;
+      }
+    }
+
+    // If stage changed, update the task
+    if (task.project_stage !== newStageId) {
+      try {
+        await tasksService.patchTask(taskId, { project_stage: newStageId });
+        toast.success('Task moved successfully');
+        await fetchProjectAndTasks();
+      } catch (error) {
+        console.error('Error updating task stage:', error);
+        toast.error('Failed to move task');
+      }
+    }
   };
 
   const getTaskStatusColor = (status) => {
@@ -407,7 +719,37 @@ export default function ProjectDetail() {
       {/* Tasks List */}
       <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20">
         <div className="p-6 border-b border-gray-200 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-xl font-bold text-gray-900">Project Tasks</h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-xl font-bold text-gray-900">Project Tasks</h2>
+            {project.stages && project.stages.length > 0 && (
+              <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+                <button
+                  onClick={() => setViewMode('table')}
+                  className={`px-3 py-1.5 rounded flex items-center gap-2 text-sm font-medium transition-colors ${
+                    viewMode === 'table'
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                  title="Table view"
+                >
+                  <List className="h-4 w-4" />
+                  Table
+                </button>
+                <button
+                  onClick={() => setViewMode('kanban')}
+                  className={`px-3 py-1.5 rounded flex items-center gap-2 text-sm font-medium transition-colors ${
+                    viewMode === 'kanban'
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                  title="Kanban view"
+                >
+                  <LayoutGrid className="h-4 w-4" />
+                  Kanban
+                </button>
+              </div>
+            )}
+          </div>
           <div className="flex flex-wrap items-center gap-2">
             <select
               value={taskFilterStatus}
@@ -462,7 +804,66 @@ export default function ProjectDetail() {
         </div>
 
         <div className="overflow-x-auto">
-          {tasks.length === 0 ? (
+          {viewMode === 'kanban' && project.stages && project.stages.length > 0 ? (
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCorners}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+            >
+              <div className="p-6">
+                <div className="flex gap-4 overflow-x-auto pb-4">
+                  {project.stages.map((stage) => {
+                    const stageTasks = filteredTasks.filter(t => t.project_stage === stage.id);
+                    return (
+                      <KanbanColumn
+                        key={stage.id}
+                        stage={stage}
+                        tasks={stageTasks}
+                        onView={(task) => {
+                          navigate(`/projects/${id}/tasks/${task.id}`);
+                        }}
+                        onEdit={(task) => {
+                          setSelectedTask(task);
+                          setShowTaskForm(true);
+                        }}
+                      />
+                    );
+                  })}
+                  {/* No Stage Column */}
+                  {(() => {
+                    const noStageTasks = filteredTasks.filter(t => !t.project_stage);
+                    if (noStageTasks.length > 0) {
+                      return (
+                        <KanbanColumn
+                          key="no-stage"
+                          stage={null}
+                          tasks={noStageTasks}
+                          onView={(task) => {
+                            navigate(`/projects/${id}/tasks/${task.id}`);
+                          }}
+                          onEdit={(task) => {
+                            setSelectedTask(task);
+                            setShowTaskForm(true);
+                          }}
+                        />
+                      );
+                    }
+                    return null;
+                  })()}
+                </div>
+              </div>
+              <DragOverlay>
+                {activeTaskId ? (
+                  <div className="bg-white rounded-lg p-3 shadow-lg border-2 border-blue-500 opacity-90">
+                    <div className="font-semibold text-sm text-gray-900">
+                      {tasks.find(t => t.id === activeTaskId)?.title || 'Task'}
+                    </div>
+                  </div>
+                ) : null}
+              </DragOverlay>
+            </DndContext>
+          ) : tasks.length === 0 ? (
             <div className="text-center py-12">
               <ListTodo className="h-16 w-16 text-gray-400 mx-auto mb-4" />
               <h3 className="text-xl font-bold text-gray-900 mb-2">No tasks yet</h3>
@@ -515,9 +916,15 @@ export default function ProjectDetail() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`px-2 py-1 rounded-full text-xs font-semibold ${getTaskStageColor(task.stage)}`}>
-                        {TASK_STAGE_LABELS[task.stage] || task.stage}
-                      </span>
+                      {task.project_stage_name ? (
+                        <span className={`px-2 py-1 rounded-full text-xs font-semibold border ${getStageColorClass(task.project_stage_color || 'blue')}`}>
+                          {task.project_stage_name}
+                        </span>
+                      ) : (
+                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${getTaskStageColor(task.stage)}`}>
+                          {TASK_STAGE_LABELS[task.stage] || task.stage}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <span className={`text-sm font-semibold ${getPriorityColor(task.priority)}`}>
@@ -536,10 +943,7 @@ export default function ProjectDetail() {
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-2">
                         <button
-                          onClick={() => {
-                            setTaskToView(task);
-                            setShowTaskDetail(true);
-                          }}
+                          onClick={() => navigate(`/projects/${id}/tasks/${task.id}`)}
                           className="p-2 hover:bg-green-100 rounded-lg transition-colors"
                           title="View Details"
                         >
@@ -571,6 +975,76 @@ export default function ProjectDetail() {
                 ))}
               </tbody>
             </table>
+          )}
+        </div>
+      </div>
+
+      {/* Project Stages */}
+      <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20">
+        <div className="p-6 border-b border-gray-200 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-blue-600" />
+              Project Stages
+            </h2>
+            <p className="text-sm text-gray-600 mt-1">Custom workflow stages for this project</p>
+          </div>
+          <button
+            onClick={openCreateStageForm}
+            className="px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-cyan-700 transition-all inline-flex items-center gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            Add Stage
+          </button>
+        </div>
+
+        <div className="p-6">
+          {!project.stages || project.stages.length === 0 ? (
+            <div className="text-center py-10">
+              <TrendingUp className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+              <p className="text-gray-600 mb-4">No stages defined yet. Create stages to organize your tasks.</p>
+              <button
+                onClick={openCreateStageForm}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Create First Stage
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {project.stages.map((stage) => (
+                <div key={stage.id} className={`bg-white rounded-xl p-4 border-2 ${getStageColorClass(stage.color)}`}>
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="flex-1">
+                      <h3 className="font-bold text-gray-900">{stage.name}</h3>
+                      <p className="text-xs text-gray-600 mt-1">{stage.description || 'No description'}</p>
+                      <p className="text-xs text-gray-500 mt-2">
+                        {stage.task_count || 0} task{stage.task_count !== 1 ? 's' : ''}
+                      </p>
+                    </div>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => openEditStageForm(stage)}
+                        className="p-1.5 hover:bg-blue-100 rounded transition-colors"
+                        title="Edit stage"
+                      >
+                        <Edit className="h-3.5 w-3.5 text-blue-600" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          setStageToDelete(stage);
+                          setShowStageDeleteConfirm(true);
+                        }}
+                        className="p-1.5 hover:bg-red-100 rounded transition-colors"
+                        title="Delete stage"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 text-red-600" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </div>
@@ -845,16 +1319,115 @@ export default function ProjectDetail() {
         </div>
       )}
 
-      {/* Task Detail Modal */}
-      {showTaskDetail && taskToView && (
-        <TaskDetailModal
-          task={taskToView}
-          onClose={() => {
-            setShowTaskDetail(false);
-            setTaskToView(null);
-          }}
-        />
+      {/* Stage Form Modal */}
+      {showStageForm && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-lg w-full shadow-2xl">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">{selectedStage ? 'Edit Stage' : 'Add Stage'}</h3>
+            <form onSubmit={handleStageSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Stage Name *</label>
+                <input
+                  type="text"
+                  value={stageFormData.name}
+                  onChange={(e) => setStageFormData((prev) => ({ ...prev, name: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g., Design Review"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <textarea
+                  value={stageFormData.description}
+                  onChange={(e) => setStageFormData((prev) => ({ ...prev, description: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows="3"
+                  placeholder="Describe this stage..."
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Color</label>
+                  <select
+                    value={stageFormData.color}
+                    onChange={(e) => setStageFormData((prev) => ({ ...prev, color: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  >
+                    <option value="gray">Gray</option>
+                    <option value="blue">Blue</option>
+                    <option value="purple">Purple</option>
+                    <option value="orange">Orange</option>
+                    <option value="yellow">Yellow</option>
+                    <option value="green">Green</option>
+                    <option value="red">Red</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Order</label>
+                  <input
+                    type="number"
+                    value={stageFormData.order}
+                    onChange={(e) => setStageFormData((prev) => ({ ...prev, order: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowStageForm(false)}
+                  className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={stageSaving}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {stageSaving ? 'Saving...' : selectedStage ? 'Update' : 'Create'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
+
+      {/* Stage Delete Confirmation Modal */}
+      {showStageDeleteConfirm && stageToDelete && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">Confirm Delete</h3>
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to delete stage{' '}
+              <span className="font-semibold">{stageToDelete.name}</span>?
+              {stageToDelete.task_count > 0 && (
+                <span className="block mt-2 text-sm text-orange-600">
+                  Warning: {stageToDelete.task_count} task{stageToDelete.task_count !== 1 ? 's are' : ' is'} currently using this stage.
+                </span>
+              )}
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={handleDeleteStage}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+              >
+                Delete
+              </button>
+              <button
+                onClick={() => {
+                  setShowStageDeleteConfirm(false);
+                  setStageToDelete(null);
+                }}
+                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

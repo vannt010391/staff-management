@@ -1,6 +1,6 @@
 from django.db import models
 from django.conf import settings
-from projects.models import Project, Topic, DesignRule
+from projects.models import Project, Topic, DesignRule, ProjectStage
 
 
 class Task(models.Model):
@@ -102,7 +102,20 @@ class Task(models.Model):
         max_length=20,
         choices=STAGE_CHOICES,
         default='planning',
-        help_text='Giai đoạn thực hiện task'
+        help_text='Giai đoạn thực hiện task (legacy)'
+    )
+    project_stage = models.ForeignKey(
+        ProjectStage,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='tasks',
+        help_text='Stage từ project (ưu tiên hơn stage cũ)'
+    )
+    stage_progress = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Tiến độ từng giai đoạn {"planning": "not_started", "design": "not_started", ...}'
     )
     price = models.DecimalField(
         max_digits=10,
@@ -148,6 +161,27 @@ class Task(models.Model):
 
     def __str__(self):
         return f"{self.title} - {self.get_status_display()}"
+
+    def get_default_stage_progress(self):
+        """Trả về stage progress mặc định"""
+        return {
+            'planning': 'not_started',
+            'design': 'not_started',
+            'development': 'not_started',
+            'review': 'not_started',
+            'testing': 'not_started',
+            'completed': 'not_started',
+        }
+
+    def save(self, *args, **kwargs):
+        """Override save để khởi tạo stage_progress"""
+        if not self.stage_progress:
+            self.stage_progress = self.get_default_stage_progress()
+        # Cập nhật stage progress dựa trên stage hiện tại
+        if self.stage and self.stage in self.stage_progress:
+            if self.stage_progress[self.stage] == 'not_started':
+                self.stage_progress[self.stage] = 'in_progress'
+        super().save(*args, **kwargs)
 
     @property
     def is_overdue(self):

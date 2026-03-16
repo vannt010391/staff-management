@@ -17,6 +17,7 @@ import ProjectDetail from './pages/ProjectDetail';
 import TasksPage from './pages/TasksPage';
 import UsersPage from './pages/UsersPage';
 import TaskDetailPage from './pages/TaskDetailPage';
+import ProjectTaskDetailPage from './pages/ProjectTaskDetailPage';
 import UserDetailPage from './pages/UserDetailPage';
 import ProfilePage from './pages/ProfilePage';
 import DocumentsPage from './pages/DocumentsPage';
@@ -91,6 +92,7 @@ function App() {
                     <Route path="/projects" element={<ProjectsPage />} />
                     <Route path="/topics" element={<TopicsPage />} />
                     <Route path="/design-rules" element={<DesignRulesPage />} />
+                    <Route path="/projects/:projectId/tasks/:taskId" element={<ProjectTaskDetailPage />} />
                     <Route path="/projects/:id" element={<ProjectDetail />} />
                     <Route path="/tasks" element={<TasksPage />} />
                     <Route path="/tasks/:id" element={<TaskDetailPage />} />

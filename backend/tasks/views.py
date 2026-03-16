@@ -406,6 +406,46 @@ class TaskViewSet(viewsets.ModelViewSet):
             'pending_review_amount': pending_review_amount,
         })
 
+    @action(detail=True, methods=['post', 'patch'])
+    def update_stage_progress(self, request, pk=None):
+        """Update stage progress for a task"""
+        task = self.get_object()
+        stage_progress = request.data.get('stage_progress', {})
+
+        if not stage_progress:
+            return Response(
+                {'error': 'stage_progress is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Validate stage_progress structure
+        valid_stages = ['planning', 'design', 'development', 'review', 'testing', 'completed']
+        valid_statuses = ['not_started', 'in_progress', 'completed']
+
+        for stage, stage_status in stage_progress.items():
+            if stage not in valid_stages:
+                return Response(
+                    {'error': f'Invalid stage: {stage}'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if stage_status not in valid_statuses:
+                return Response(
+                    {'error': f'Invalid status for stage {stage}: {stage_status}'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        # Update stage_progress
+        if not task.stage_progress:
+            task.stage_progress = task.get_default_stage_progress()
+
+        task.stage_progress.update(stage_progress)
+        task.save()
+
+        return Response({
+            'message': 'Stage progress updated successfully',
+            'stage_progress': task.stage_progress,
+        })
+
 
 class TaskFileViewSet(viewsets.ModelViewSet):
     """

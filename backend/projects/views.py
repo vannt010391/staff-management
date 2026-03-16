@@ -6,13 +6,14 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from django.db.models import Q
 
-from .models import Project, Topic, DesignRule
+from .models import Project, Topic, DesignRule, ProjectStage
 from .serializers import (
     ProjectListSerializer,
     ProjectDetailSerializer,
     ProjectCreateUpdateSerializer,
     TopicSerializer,
-    DesignRuleSerializer
+    DesignRuleSerializer,
+    ProjectStageSerializer
 )
 from accounts.permissions import IsManagerOrAdmin, IsManagerAdminOrStaffReadOnly, IsManagerAdminTeamLeadOrStaff
 
@@ -228,4 +229,39 @@ class DesignRuleViewSet(viewsets.ModelViewSet):
         return Response({
             'message': 'Design rule order updated successfully',
             'design_rule': DesignRuleSerializer(rule).data
+        })
+
+
+class ProjectStageViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for ProjectStage CRUD operations
+    Manager and Admin can manage stages, Staff can view (read-only)
+    """
+    queryset = ProjectStage.objects.all()
+    serializer_class = ProjectStageSerializer
+    permission_classes = [IsManagerAdminOrStaffReadOnly]
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ['project']
+    search_fields = ['name', 'description']
+    ordering_fields = ['order', 'created_at']
+    ordering = ['order', 'created_at']
+
+    @action(detail=True, methods=['post'])
+    def reorder(self, request, pk=None):
+        """Update stage order"""
+        stage = self.get_object()
+        new_order = request.data.get('order')
+
+        if new_order is None:
+            return Response(
+                {'error': 'Order field is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        stage.order = new_order
+        stage.save()
+
+        return Response({
+            'message': 'Stage order updated successfully',
+            'stage': ProjectStageSerializer(stage).data
         })

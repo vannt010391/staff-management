@@ -117,6 +117,19 @@ export const tasksService = {
   },
 
   /**
+   * Update stage progress for a task
+   * @param {number} id - Task ID
+   * @param {Object} stageProgress - Stage progress object with status for each stage
+   * @returns {Promise} Updated task with new stage_progress
+   */
+  async updateStageProgress(id, stageProgress) {
+    const response = await api.post(`/tasks/${id}/update_stage_progress/`, {
+      stage_progress: stageProgress
+    });
+    return response.data;
+  },
+
+  /**
    * Upload file to task
    * @param {number} taskId - Task ID
    * @param {File} file - File to upload

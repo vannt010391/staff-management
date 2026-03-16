@@ -1,0 +1,12 @@
+#!/bin/bash
+echo "=== Instructions to restart servers ==="
+echo ""
+echo "1. Stop the frontend dev server (Ctrl+C in its terminal)"
+echo "2. Restart it with: cd frontend && npm run dev"
+echo ""
+echo "3. Stop the backend dev server (Ctrl+C in its terminal)"  
+echo "4. Restart it with: cd backend && python manage.py runserver"
+echo ""
+echo "Both servers need to be restarted to apply the changes:"
+echo "  - Backend: Added progress field to Project model"
+echo "  - Frontend: Installed xlsx package for task import"

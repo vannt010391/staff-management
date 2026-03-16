@@ -204,6 +204,47 @@ export const projectsService = {
   async getProjectStats(id) {
     const response = await api.get(`/projects/${id}/stats/`);
     return response.data;
+  },
+
+  /**
+   * Get all project stages
+   * @param {Object} params - Query params (project, search, ordering)
+   * @returns {Promise} List of stages
+   */
+  async getAllStages(params = {}) {
+    const response = await api.get('/project-stages/', { params });
+    return response.data.results || (Array.isArray(response.data) ? response.data : []);
+  },
+
+  /**
+   * Create project stage
+   * @param {Object} data - Stage payload
+   * @returns {Promise} Created stage
+   */
+  async createStage(data) {
+    const response = await api.post('/project-stages/', data);
+    return response.data;
+  },
+
+  /**
+   * Update project stage
+   * @param {number} id - Stage ID
+   * @param {Object} data - Updated payload
+   * @returns {Promise} Updated stage
+   */
+  async updateStage(id, data) {
+    const response = await api.put(`/project-stages/${id}/`, data);
+    return response.data;
+  },
+
+  /**
+   * Delete project stage
+   * @param {number} id - Stage ID
+   * @returns {Promise}
+   */
+  async deleteStage(id) {
+    const response = await api.delete(`/project-stages/${id}/`);
+    return response.data;
   }
 };
 

@@ -1,11 +1,28 @@
 from rest_framework import serializers
-from .models import Project, Topic, DesignRule
+from .models import Project, Topic, DesignRule, ProjectStage
 from hr.serializers import DepartmentSerializer
 from hr.models import Department
 from accounts.serializers import UserSerializer
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
+
+
+class ProjectStageSerializer(serializers.ModelSerializer):
+    """Serializer for ProjectStage model"""
+    task_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProjectStage
+        fields = [
+            'id', 'name', 'description', 'project', 'order', 'color',
+            'task_count', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def get_task_count(self, obj):
+        """Get number of tasks in this stage"""
+        return obj.tasks.count()
 
 
 class DesignRuleSerializer(serializers.ModelSerializer):
@@ -99,6 +116,7 @@ class ProjectDetailSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     topics = TopicSerializer(many=True, read_only=True)
     design_rules = DesignRuleSerializer(many=True, read_only=True)
+    stages = ProjectStageSerializer(many=True, read_only=True)
     total_tasks = serializers.SerializerMethodField()
     completed_tasks = serializers.SerializerMethodField()
     progress = serializers.SerializerMethodField()
@@ -111,7 +129,7 @@ class ProjectDetailSerializer(serializers.ModelSerializer):
             'id', 'name', 'description', 'client_name', 'budget',
             'status', 'status_display', 'start_date', 'end_date',
             'created_by', 'created_by_username',
-            'topics', 'design_rules',
+            'topics', 'design_rules', 'stages',
             'total_tasks', 'completed_tasks', 'progress',
             'departments', 'departments_details',
             'members', 'members_details',
