@@ -189,19 +189,20 @@ class TaskViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated()]
 
     # Fields allowed for each role to update
-    STAFF_EDITABLE_FIELDS = {'title', 'description', 'priority', 'due_date', 'stage', 'status'}
+    STAFF_EDITABLE_FIELDS = {'title', 'description', 'priority', 'due_date', 'stage', 'status', 'price', 'assigned_to'}
     FREELANCER_EDITABLE_FIELDS = {'status'}
 
     def _record_changes(self, task_before, task_after, user):
         """Compare task before/after update and record changes in TaskChangeHistory."""
         tracked_fields = {
-            'title': 'Title',
-            'description': 'Description',
-            'priority': 'Priority',
-            'status': 'Status',
-            'due_date': 'Due Date',
-            'stage': 'Stage',
-            'price': 'Price',
+            'title': 'Tiêu đề',
+            'description': 'Mô tả',
+            'priority': 'Ưu tiên',
+            'status': 'Trạng thái',
+            'due_date': 'Ngày hết hạn',
+            'stage': 'Giai đoạn',
+            'price': 'Giá',
+            'assigned_to_id': 'Người thực hiện',
         }
         histories = []
         for field, label in tracked_fields.items():
@@ -230,7 +231,7 @@ class TaskViewSet(viewsets.ModelViewSet):
         # Snapshot before-values
         snapshot_before = Task(
             **{f: getattr(task_before, f) for f in [
-                'title', 'description', 'priority', 'status', 'due_date', 'stage', 'price'
+                'title', 'description', 'priority', 'status', 'due_date', 'stage', 'price', 'assigned_to_id'
             ]}
         )
 

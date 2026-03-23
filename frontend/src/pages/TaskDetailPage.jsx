@@ -34,6 +34,7 @@ export default function TaskDetailPage() {
   const [editMode, setEditMode] = useState(false);
   const [editForm, setEditForm] = useState({});
   const [editSaving, setEditSaving] = useState(false);
+  const [allUsers, setAllUsers] = useState([]);
 
   // Change history
   const [changeHistory, setChangeHistory] = useState([]);
@@ -53,6 +54,25 @@ export default function TaskDetailPage() {
     }
   }, [canAssignReviewer]);
 
+  useEffect(() => {
+    // Load all users for the assigned_to dropdown (admin/manager/staff/team_lead)
+    const loadUsers = async () => {
+      try {
+        const [admins, managers, teamLeads, staffs, freelancers] = await Promise.all([
+          usersService.getUsersByRole('admin'),
+          usersService.getUsersByRole('manager'),
+          usersService.getUsersByRole('team_lead'),
+          usersService.getUsersByRole('staff'),
+          usersService.getUsersByRole('freelancer'),
+        ]);
+        const map = new Map();
+        [...admins, ...managers, ...teamLeads, ...staffs, ...freelancers].forEach(u => map.set(u.id, u));
+        setAllUsers(Array.from(map.values()));
+      } catch { /* ignore */ }
+    };
+    loadUsers();
+  }, []);
+
   const fetchTask = async () => {
     try {
       setLoading(true);
@@ -62,9 +82,11 @@ export default function TaskDetailPage() {
         title: data.title || '',
         description: data.description || '',
         priority: data.priority || 'medium',
-        due_date: data.due_date || '',
+        due_date: data.due_date ? data.due_date.substring(0, 10) : '',
         stage: data.stage || 'planning',
         status: data.status || 'new',
+        price: data.price || '',
+        assigned_to: data.assigned_to ? String(data.assigned_to) : '',
       });
       setSelectedReviewerId(data.reviewer ? String(data.reviewer) : '');
       setFailedCriteria({});
@@ -406,6 +428,33 @@ export default function TaskDetailPage() {
                   value={editForm.due_date}
                   onChange={(e) => setEditForm(f => ({ ...f, due_date: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Người thực hiện</label>
+                <select
+                  value={editForm.assigned_to}
+                  onChange={(e) => setEditForm(f => ({ ...f, assigned_to: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                >
+                  <option value="">-- Chưa giao --</option>
+                  {allUsers.map(u => (
+                    <option key={u.id} value={String(u.id)}>
+                      {(u.first_name || u.last_name) ? `${u.first_name || ''} ${u.last_name || ''}`.trim() : u.username} ({u.role})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Giá (VNĐ)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1000"
+                  value={editForm.price}
+                  onChange={(e) => setEditForm(f => ({ ...f, price: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  placeholder="0"
                 />
               </div>
             </div>
