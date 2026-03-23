@@ -15,7 +15,12 @@ export const useAuthStore = create((set) => ({
       set({ user, isAuthenticated: true, isLoading: false });
       return { success: true };
     } catch (error) {
-      const message = error.response?.data?.error || 'Login failed';
+      const errData = error.response?.data;
+      const message =
+        errData?.non_field_errors?.[0] ||
+        errData?.detail ||
+        errData?.error ||
+        'Đăng nhập thất bại';
       set({ error: message, isLoading: false });
       return { success: false, error: message };
     }
