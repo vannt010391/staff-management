@@ -345,22 +345,22 @@ export default function TaskDetailPage() {
                 onClick={() => setEditMode(true)}
                 className="flex items-center gap-1 px-3 py-1.5 text-sm bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition-colors"
               >
-                <Edit2 className="h-4 w-4" /> Chỉnh sửa
+                <Edit2 className="h-4 w-4" /> Edit
               </button>
             )}
           </div>
           <p className="text-gray-600 mt-2 whitespace-pre-line">{task.description || 'No description'}</p>
         </div>
 
-        {/* Staff Edit Form */}
+        {/* Edit Form */}
         {canEdit && editMode && (
           <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-indigo-200 shadow-lg space-y-4">
             <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-              <Edit2 className="h-5 w-5 text-indigo-600" /> Chỉnh sửa thông tin task
+              <Edit2 className="h-5 w-5 text-indigo-600" /> Edit Task
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Tiêu đề</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
                 <input
                   type="text"
                   value={editForm.title}
@@ -369,7 +369,7 @@ export default function TaskDetailPage() {
                 />
               </div>
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Mô tả</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                 <textarea
                   rows={3}
                   value={editForm.description}
@@ -378,51 +378,51 @@ export default function TaskDetailPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Ưu tiên</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
                 <select
                   value={editForm.priority}
                   onChange={(e) => setEditForm(f => ({ ...f, priority: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                 >
-                  <option value="low">Thấp</option>
-                  <option value="medium">Trung bình</option>
-                  <option value="high">Cao</option>
-                  <option value="urgent">Khẩn cấp</option>
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="urgent">Urgent</option>
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Trạng thái</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
                 <select
                   value={editForm.status}
                   onChange={(e) => setEditForm(f => ({ ...f, status: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                 >
-                  <option value="new">Mới</option>
-                  <option value="assigned">Đã giao</option>
-                  <option value="working">Đang làm</option>
-                  <option value="review_pending">Chờ duyệt</option>
-                  <option value="approved">Đã duyệt</option>
-                  <option value="rejected">Bị từ chối</option>
-                  <option value="completed">Hoàn thành</option>
+                  <option value="new">New</option>
+                  <option value="assigned">Assigned</option>
+                  <option value="working">Working</option>
+                  <option value="review_pending">Review Pending</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                  <option value="completed">Completed</option>
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Giai đoạn</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Stage</label>
                 <select
                   value={editForm.stage}
                   onChange={(e) => setEditForm(f => ({ ...f, stage: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                 >
-                  <option value="planning">Lên kế hoạch</option>
-                  <option value="design">Thiết kế</option>
-                  <option value="development">Phát triển</option>
+                  <option value="planning">Planning</option>
+                  <option value="design">Design</option>
+                  <option value="development">Development</option>
                   <option value="review">Review</option>
-                  <option value="testing">Kiểm thử</option>
-                  <option value="completed">Hoàn thành</option>
+                  <option value="testing">Testing</option>
+                  <option value="completed">Completed</option>
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Ngày hết hạn</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
                 <input
                   type="date"
                   value={editForm.due_date}
@@ -431,13 +431,13 @@ export default function TaskDetailPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Người thực hiện</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Assigned To</label>
                 <select
                   value={editForm.assigned_to}
                   onChange={(e) => setEditForm(f => ({ ...f, assigned_to: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                 >
-                  <option value="">-- Chưa giao --</option>
+                  <option value="">-- Unassigned --</option>
                   {allUsers.map(u => (
                     <option key={u.id} value={String(u.id)}>
                       {(u.first_name || u.last_name) ? `${u.first_name || ''} ${u.last_name || ''}`.trim() : u.username} ({u.role})
@@ -446,7 +446,7 @@ export default function TaskDetailPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Giá (VNĐ)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Price</label>
                 <input
                   type="number"
                   min="0"
@@ -463,19 +463,20 @@ export default function TaskDetailPage() {
                 onClick={() => setEditMode(false)}
                 className="flex items-center gap-1 px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
               >
-                <X className="h-4 w-4" /> Hủy
+                <X className="h-4 w-4" /> Cancel
               </button>
               <button
                 onClick={handleSaveEdit}
                 disabled={editSaving}
                 className="flex items-center gap-1 px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
               >
-                <Save className="h-4 w-4" /> {editSaving ? 'Đang lưu...' : 'Lưu thay đổi'}
+                <Save className="h-4 w-4" /> {editSaving ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
           </div>
         )}
 
+        {!editMode && (
         <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg grid grid-cols-1 md:grid-cols-2 gap-5">
           <Info icon={Target} label="Project" value={task.project_name || '-'} />
           <Info icon={Clock} label="Status" value={task.status_display || task.status || '-'} />
@@ -488,6 +489,7 @@ export default function TaskDetailPage() {
           <Info icon={Calendar} label="Created" value={task.created_at ? new Date(task.created_at).toLocaleString() : '-'} />
           <Info icon={DollarSign} label="Freelancer Earning" value={formatCurrency(Number(task.freelancer_earning || 0))} />
         </div>
+        )}
 
         {/* Task Resources */}
         <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg">
@@ -781,12 +783,12 @@ export default function TaskDetailPage() {
         <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg">
           <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
             <History className="h-5 w-5 text-indigo-600" />
-            Lịch sử thay đổi
+            Change History
           </h3>
           {historyLoading ? (
-            <div className="text-center py-6 text-gray-400">Đang tải...</div>
+            <div className="text-center py-6 text-gray-400">Loading...</div>
           ) : changeHistory.length === 0 ? (
-            <p className="text-sm text-gray-500">Chưa có lịch sử thay đổi</p>
+            <p className="text-sm text-gray-500">No change history yet</p>
           ) : (
             <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
               {changeHistory.map((item) => (
