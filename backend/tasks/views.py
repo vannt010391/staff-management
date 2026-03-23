@@ -137,16 +137,23 @@ class TaskViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """
         PRIVACY RULE IMPLEMENTATION:
-        - Freelancers: only see their assigned tasks
-        - Staff: only see their assigned tasks (read-mostly)
+        - Freelancers: only see tasks assigned to them
+        - Staff: see all tasks in projects they're a member of, plus tasks assigned to them
         - Team Lead: see all tasks (can assign & review)
         - Manager & Admin: see all tasks (full access)
         """
+        from django.db.models import Q
         user = self.request.user
 
-        if user.role in ['freelancer', 'staff']:
-            # Freelancer and Staff only see tasks assigned to them
-            return Task.objects.filter(assigned_to=user)
+        if user.role == 'freelancer':
+            return Task.objects.filter(
+                Q(assigned_to=user) | Q(assignees=user)
+            ).distinct()
+        elif user.role == 'staff':
+            # Staff see tasks in projects they're a member of, or tasks directly assigned to them
+            return Task.objects.filter(
+                Q(assigned_to=user) | Q(assignees=user) | Q(project__members=user)
+            ).distinct()
         elif user.role in ['team_lead', 'manager', 'admin'] or user.is_superuser:
             # Team Lead, Manager and Admin see all tasks
             return Task.objects.all()
