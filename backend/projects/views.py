@@ -5,6 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from django.db.models import Q
+from django.core.exceptions import ObjectDoesNotExist
 
 from .models import Project, Topic, DesignRule, ProjectStage
 from .serializers import (
@@ -22,7 +23,8 @@ class ProjectViewSet(viewsets.ModelViewSet):
     """
     ViewSet for Project CRUD operations
     Admin/Manager: see all projects
-    Others: see projects where their department is assigned OR they are a direct member
+    Staff/Team Lead: see projects from their department OR where they are direct members
+    Freelancers: see only projects where they are direct members
     """
     queryset = Project.objects.all()
     permission_classes = [IsManagerAdminOrStaffReadOnly]
@@ -34,12 +36,23 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+
+        # Admin and Manager can see all projects
         if user.role in ['admin', 'manager'] or user.is_superuser:
             return Project.objects.all().distinct()
-        # Staff/team_lead: see projects via department OR direct membership
-        return Project.objects.filter(
-            Q(departments__employees__user=user) | Q(members=user)
-        ).distinct()
+
+        # Staff/Team Lead: see projects via department OR direct membership
+        filters = Q(members=user)  # Always include projects where user is a direct member
+
+        # If user has an employee profile with a department, also include projects for that department
+        try:
+            if hasattr(user, 'employee_profile') and user.employee_profile.department:
+                filters |= Q(departments=user.employee_profile.department)
+        except (AttributeError, ObjectDoesNotExist):
+            # User doesn't have an employee profile, only show projects where they are direct members
+            pass
+
+        return Project.objects.filter(filters).distinct()
 
     def get_serializer_class(self):
         if self.action == 'list':

@@ -773,7 +773,13 @@ class PlanDailyProgressViewSet(viewsets.ModelViewSet):
         if not plan_id:
             return Response({'error': 'plan is required'}, status=status.HTTP_400_BAD_REQUEST)
 
-        plan = self.get_queryset().filter(id=plan_id).first()
+        # Get the Plan object (not PlanDailyProgress) with permission check
+        user = request.user
+        if user.role == 'admin' or user.is_superuser:
+            plan = Plan.objects.filter(id=plan_id).first()
+        else:
+            plan = Plan.objects.filter(id=plan_id, user=user).first()
+
         if not plan:
             return Response({'error': 'Plan not found or access denied'}, status=status.HTTP_404_NOT_FOUND)
 
