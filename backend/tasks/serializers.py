@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.utils import timezone
 from django.contrib.auth import get_user_model
-from .models import Task, TaskFile, TaskComment
+from .models import Task, TaskFile, TaskComment, TaskChangeHistory
 from projects.serializers import DesignRuleSerializer
 
 User = get_user_model()
@@ -414,3 +414,22 @@ class TaskReviewerAssignSerializer(serializers.Serializer):
             raise serializers.ValidationError('Reviewer must be admin, manager, team lead, or staff.')
 
         return value
+
+
+class TaskChangeHistorySerializer(serializers.ModelSerializer):
+    """Serializer for TaskChangeHistory - lịch sử thay đổi task"""
+    changed_by_username = serializers.CharField(source='changed_by.username', read_only=True)
+    changed_by_full_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TaskChangeHistory
+        fields = [
+            'id', 'task', 'changed_by', 'changed_by_username', 'changed_by_full_name',
+            'changed_at', 'field_name', 'old_value', 'new_value', 'change_note'
+        ]
+        read_only_fields = fields
+
+    def get_changed_by_full_name(self, obj):
+        if not obj.changed_by:
+            return 'Unknown'
+        return obj.changed_by.get_full_name() or obj.changed_by.username

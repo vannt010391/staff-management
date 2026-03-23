@@ -602,12 +602,31 @@ class PlanViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def add_goal(self, request, pk=None):
-        """Add a goal to this plan"""
+        """Add a goal to this plan. If goal links a task, auto-assign the plan owner to that task."""
         plan = self.get_object()
         serializer = PlanGoalSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save(plan=plan)
+            goal = serializer.save(plan=plan)
             plan.auto_calculate_completion()
+
+            # Auto-assign plan owner to task assignees when goal links a task
+            if goal.related_task_id:
+                from tasks.models import Task, TaskChangeHistory
+                try:
+                    task = Task.objects.get(id=goal.related_task_id)
+                    if not task.assignees.filter(id=plan.user_id).exists():
+                        task.assignees.add(plan.user)
+                        TaskChangeHistory.objects.create(
+                            task=task,
+                            changed_by=request.user,
+                            field_name='Assignees',
+                            old_value='(not assigned)',
+                            new_value=plan.user.get_full_name() or plan.user.username,
+                            change_note=f'Auto-assigned via plan "{plan.title}"',
+                        )
+                except Task.DoesNotExist:
+                    pass
+
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -715,6 +734,27 @@ class PlanGoalViewSet(viewsets.ModelViewSet):
 
         goal.save()
         return Response(PlanGoalSerializer(goal).data)
+
+    def perform_destroy(self, instance):
+        """When a goal linking a task is deleted, remove plan owner from task assignees."""
+        if instance.related_task_id:
+            from tasks.models import Task, TaskChangeHistory
+            try:
+                task = Task.objects.get(id=instance.related_task_id)
+                plan_user = instance.plan.user
+                if task.assignees.filter(id=plan_user.id).exists():
+                    task.assignees.remove(plan_user)
+                    TaskChangeHistory.objects.create(
+                        task=task,
+                        changed_by=self.request.user,
+                        field_name='Assignees',
+                        old_value=plan_user.get_full_name() or plan_user.username,
+                        new_value='(removed)',
+                        change_note=f'Auto-unassigned: goal removed from plan "{instance.plan.title}"',
+                    )
+            except Task.DoesNotExist:
+                pass
+        instance.delete()
 
 
 class PlanNoteViewSet(viewsets.ModelViewSet):

@@ -306,3 +306,36 @@ class TaskComment(models.Model):
     def is_reply(self):
         """Kiểm tra có phải là reply không"""
         return self.parent is not None
+
+
+class TaskChangeHistory(models.Model):
+    """
+    Lưu lịch sử thay đổi thông tin task
+    """
+    task = models.ForeignKey(
+        Task,
+        on_delete=models.CASCADE,
+        related_name='change_history',
+        help_text='Task được thay đổi'
+    )
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='task_changes',
+        help_text='Người thực hiện thay đổi'
+    )
+    changed_at = models.DateTimeField(auto_now_add=True)
+    field_name = models.CharField(max_length=100, help_text='Tên trường bị thay đổi')
+    old_value = models.TextField(blank=True, null=True, help_text='Giá trị cũ')
+    new_value = models.TextField(blank=True, null=True, help_text='Giá trị mới')
+    change_note = models.TextField(blank=True, help_text='Ghi chú thêm về thay đổi')
+
+    class Meta:
+        verbose_name = 'Task Change History'
+        verbose_name_plural = 'Task Change Histories'
+        ordering = ['-changed_at']
+
+    def __str__(self):
+        user = self.changed_by.username if self.changed_by else 'unknown'
+        return f"{self.task.title} - {self.field_name} changed by {user}"

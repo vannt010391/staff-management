@@ -10,7 +10,7 @@ from django.utils import timezone
 from django.db.models import Sum, DecimalField, Value
 from django.db.models.functions import Coalesce
 
-from .models import Task, TaskFile, TaskComment
+from .models import Task, TaskFile, TaskComment, TaskChangeHistory
 from .serializers import (
     TaskListSerializer,
     TaskDetailSerializer,
@@ -19,7 +19,8 @@ from .serializers import (
     TaskReviewerAssignSerializer,
     TaskStatusChangeSerializer,
     TaskFileSerializer,
-    TaskCommentSerializer
+    TaskCommentSerializer,
+    TaskChangeHistorySerializer,
 )
 from accounts.permissions import IsManagerOrAdmin, IsOwnerOrManagerOrAdmin, CanCreateTask
 from notifications.services import (
@@ -187,32 +188,74 @@ class TaskViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated()]
         return [IsAuthenticated()]
 
+    # Fields allowed for each role to update
+    STAFF_EDITABLE_FIELDS = {'title', 'description', 'priority', 'due_date', 'stage', 'status'}
+    FREELANCER_EDITABLE_FIELDS = {'status'}
+
+    def _record_changes(self, task_before, task_after, user):
+        """Compare task before/after update and record changes in TaskChangeHistory."""
+        tracked_fields = {
+            'title': 'Title',
+            'description': 'Description',
+            'priority': 'Priority',
+            'status': 'Status',
+            'due_date': 'Due Date',
+            'stage': 'Stage',
+            'price': 'Price',
+        }
+        histories = []
+        for field, label in tracked_fields.items():
+            old_val = str(getattr(task_before, field, '') or '')
+            new_val = str(getattr(task_after, field, '') or '')
+            if old_val != new_val:
+                histories.append(TaskChangeHistory(
+                    task=task_after,
+                    changed_by=user,
+                    field_name=label,
+                    old_value=old_val,
+                    new_value=new_val,
+                ))
+        if histories:
+            TaskChangeHistory.objects.bulk_create(histories)
+
     def perform_update(self, serializer):
         """
-        Freelancers can only update status and add comments
-        Staff, Team Lead, Managers, Admins can update all fields
+        Freelancers can only update status
+        Staff can update a set of allowed fields
+        Team Lead, Managers, Admins can update all fields
+        All updates are tracked in TaskChangeHistory.
         """
         user = self.request.user
+        task_before = serializer.instance
+        # Snapshot before-values
+        snapshot_before = Task(
+            **{f: getattr(task_before, f) for f in [
+                'title', 'description', 'priority', 'status', 'due_date', 'stage', 'price'
+            ]}
+        )
 
         if user.role == 'freelancer':
-            # Freelancers can only update specific fields
-            allowed_fields = {'status'}
             update_data = {
-                key: value for key, value in serializer.validated_data.items()
-                if key in allowed_fields
+                k: v for k, v in serializer.validated_data.items()
+                if k in self.FREELANCER_EDITABLE_FIELDS
             }
-
             if 'status' in update_data:
-                task = serializer.instance
-                self._validate_freelancer_status_change(task, update_data['status'])
-
-            serializer.save(**update_data)
-        elif user.role in ['staff', 'team_lead', 'manager', 'admin'] or user.is_superuser:
-            # Staff, Team Lead, Manager, Admin can update all fields
-            serializer.save()
+                self._validate_freelancer_status_change(task_before, update_data['status'])
+            task_after = serializer.save(**update_data)
+        elif user.role == 'staff':
+            update_data = {
+                k: v for k, v in serializer.validated_data.items()
+                if k in self.STAFF_EDITABLE_FIELDS
+            }
+            if 'status' in update_data:
+                self._validate_freelancer_status_change(task_before, update_data['status'])
+            task_after = serializer.save(**update_data)
+        elif user.role in ['team_lead', 'manager', 'admin'] or user.is_superuser:
+            task_after = serializer.save()
         else:
-            # Default: no update allowed
             raise serializers.ValidationError("You do not have permission to update this task.")
+
+        self._record_changes(snapshot_before, task_after, user)
 
     @action(detail=True, methods=['post'], permission_classes=[IsManagerOrAdmin])
     def assign(self, request, pk=None):
@@ -235,6 +278,14 @@ class TaskViewSet(viewsets.ModelViewSet):
             'message': f'Task assigned to {freelancer.username} successfully',
             'task': TaskDetailSerializer(task, context={'request': request}).data
         })
+
+    @action(detail=True, methods=['get'])
+    def change_history(self, request, pk=None):
+        """Get full change history for this task"""
+        task = self.get_object()
+        history = task.change_history.select_related('changed_by').all()
+        serializer = TaskChangeHistorySerializer(history, many=True)
+        return Response(serializer.data)
 
     @action(detail=True, methods=['post'], permission_classes=[IsManagerOrAdmin])
     def assign_reviewer(self, request, pk=None):
