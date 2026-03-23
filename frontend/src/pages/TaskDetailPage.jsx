@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Target, User, Calendar, DollarSign, Clock, Flag, FileText, Upload, Trash2, Download } from 'lucide-react';
+import { ArrowLeft, Target, User, Calendar, DollarSign, Clock, Flag, FileText, Upload, Trash2, Download, History, Edit2, Save, X } from 'lucide-react';
 import { toast } from 'sonner';
 import tasksService from '../services/tasks';
 import usersService from '../services/users';
@@ -30,11 +30,21 @@ export default function TaskDetailPage() {
   const [uploadComment, setUploadComment] = useState('');
   const [uploadLoading, setUploadLoading] = useState(false);
 
+  // Staff edit state
+  const [editMode, setEditMode] = useState(false);
+  const [editForm, setEditForm] = useState({});
+  const [editSaving, setEditSaving] = useState(false);
+
+  // Change history
+  const [changeHistory, setChangeHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
   const canAssignReviewer = ['admin', 'manager'].includes(user?.role);
   const isReviewerRole = ['admin', 'manager', 'team_lead', 'staff'].includes(user?.role);
 
   useEffect(() => {
     fetchTask();
+    fetchChangeHistory();
   }, [id]);
 
   useEffect(() => {
@@ -48,6 +58,14 @@ export default function TaskDetailPage() {
       setLoading(true);
       const data = await tasksService.getTask(id);
       setTask(data);
+      setEditForm({
+        title: data.title || '',
+        description: data.description || '',
+        priority: data.priority || 'medium',
+        due_date: data.due_date || '',
+        stage: data.stage || 'planning',
+        status: data.status || 'new',
+      });
       setSelectedReviewerId(data.reviewer ? String(data.reviewer) : '');
       setFailedCriteria({});
       setReviewComment('');
@@ -56,6 +74,18 @@ export default function TaskDetailPage() {
       toast.error('Failed to load task detail');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchChangeHistory = async () => {
+    try {
+      setHistoryLoading(true);
+      const data = await tasksService.getChangeHistory(id);
+      setChangeHistory(Array.isArray(data) ? data : (data.results || []));
+    } catch {
+      // ignore
+    } finally {
+      setHistoryLoading(false);
     }
   };
 
@@ -241,6 +271,23 @@ export default function TaskDetailPage() {
     }
   };
 
+  const handleSaveEdit = async () => {
+    try {
+      setEditSaving(true);
+      await tasksService.patchTask(id, editForm);
+      toast.success('Task updated successfully');
+      setEditMode(false);
+      await fetchTask();
+      await fetchChangeHistory();
+    } catch (error) {
+      const errData = error.response?.data;
+      const msg = errData?.detail || errData?.error || Object.values(errData || {})[0] || 'Failed to update task';
+      toast.error(Array.isArray(msg) ? msg[0] : msg);
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   if (loading) {
     return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600" /></div>;
   }
@@ -259,6 +306,7 @@ export default function TaskDetailPage() {
   const resources = Array.isArray(task.resources) ? task.resources : [];
   const uploads = Array.isArray(task.uploads) ? task.uploads : [];
   const canUploadFiles = isAssignedFreelancer || ['admin', 'manager'].includes(user?.role);
+  const canEdit = ['admin', 'manager', 'staff', 'team_lead'].includes(user?.role);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
@@ -268,9 +316,116 @@ export default function TaskDetailPage() {
         </button>
 
         <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg">
-          <h1 className="text-3xl font-bold text-gray-900">{task.title}</h1>
+          <div className="flex items-start justify-between mb-2">
+            <h1 className="text-3xl font-bold text-gray-900">{task.title}</h1>
+            {canEdit && !editMode && (
+              <button
+                onClick={() => setEditMode(true)}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition-colors"
+              >
+                <Edit2 className="h-4 w-4" /> Chỉnh sửa
+              </button>
+            )}
+          </div>
           <p className="text-gray-600 mt-2 whitespace-pre-line">{task.description || 'No description'}</p>
         </div>
+
+        {/* Staff Edit Form */}
+        {canEdit && editMode && (
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-indigo-200 shadow-lg space-y-4">
+            <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+              <Edit2 className="h-5 w-5 text-indigo-600" /> Chỉnh sửa thông tin task
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Tiêu đề</label>
+                <input
+                  type="text"
+                  value={editForm.title}
+                  onChange={(e) => setEditForm(f => ({ ...f, title: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Mô tả</label>
+                <textarea
+                  rows={3}
+                  value={editForm.description}
+                  onChange={(e) => setEditForm(f => ({ ...f, description: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Ưu tiên</label>
+                <select
+                  value={editForm.priority}
+                  onChange={(e) => setEditForm(f => ({ ...f, priority: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                >
+                  <option value="low">Thấp</option>
+                  <option value="medium">Trung bình</option>
+                  <option value="high">Cao</option>
+                  <option value="urgent">Khẩn cấp</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Trạng thái</label>
+                <select
+                  value={editForm.status}
+                  onChange={(e) => setEditForm(f => ({ ...f, status: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                >
+                  <option value="new">Mới</option>
+                  <option value="assigned">Đã giao</option>
+                  <option value="working">Đang làm</option>
+                  <option value="review_pending">Chờ duyệt</option>
+                  <option value="approved">Đã duyệt</option>
+                  <option value="rejected">Bị từ chối</option>
+                  <option value="completed">Hoàn thành</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Giai đoạn</label>
+                <select
+                  value={editForm.stage}
+                  onChange={(e) => setEditForm(f => ({ ...f, stage: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                >
+                  <option value="planning">Lên kế hoạch</option>
+                  <option value="design">Thiết kế</option>
+                  <option value="development">Phát triển</option>
+                  <option value="review">Review</option>
+                  <option value="testing">Kiểm thử</option>
+                  <option value="completed">Hoàn thành</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Ngày hết hạn</label>
+                <input
+                  type="date"
+                  value={editForm.due_date}
+                  onChange={(e) => setEditForm(f => ({ ...f, due_date: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setEditMode(false)}
+                className="flex items-center gap-1 px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                <X className="h-4 w-4" /> Hủy
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                disabled={editSaving}
+                className="flex items-center gap-1 px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+              >
+                <Save className="h-4 w-4" /> {editSaving ? 'Đang lưu...' : 'Lưu thay đổi'}
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg grid grid-cols-1 md:grid-cols-2 gap-5">
           <Info icon={Target} label="Project" value={task.project_name || '-'} />
@@ -571,6 +726,45 @@ export default function TaskDetailPage() {
               ))
             )}
           </div>
+        </div>
+
+        {/* Change History */}
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg">
+          <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+            <History className="h-5 w-5 text-indigo-600" />
+            Lịch sử thay đổi
+          </h3>
+          {historyLoading ? (
+            <div className="text-center py-6 text-gray-400">Đang tải...</div>
+          ) : changeHistory.length === 0 ? (
+            <p className="text-sm text-gray-500">Chưa có lịch sử thay đổi</p>
+          ) : (
+            <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+              {changeHistory.map((item) => (
+                <div key={item.id} className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-semibold text-gray-800">
+                      {item.changed_by_full_name || item.changed_by_username || 'Hệ thống'}
+                    </span>
+                    <span className="text-xs text-gray-400">
+                      {new Date(item.changed_at).toLocaleString('vi-VN')}
+                    </span>
+                  </div>
+                  {item.change_note ? (
+                    <p className="text-gray-600">{item.change_note}</p>
+                  ) : (
+                    <p className="text-gray-600">
+                      <span className="font-medium text-blue-700">{item.field_name}</span>
+                      {': '}
+                      <span className="line-through text-red-500">{item.old_value || '(trống)'}</span>
+                      {' → '}
+                      <span className="text-green-600">{item.new_value || '(trống)'}</span>
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

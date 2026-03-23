@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { X, Calendar, Users, DollarSign, Clock, Tag, FileText, CheckCircle, AlertCircle, Target, Flag, TrendingUp, Save } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, Calendar, Users, DollarSign, Clock, Tag, FileText, CheckCircle, AlertCircle, Target, Flag, TrendingUp, Save, History } from 'lucide-react';
 import { toast } from 'sonner';
 import tasksService from '../../services/tasks';
 import { TASK_STATUS_LABELS, TASK_PRIORITY_LABELS, TASK_STAGE_LABELS } from '../../constants';
@@ -70,6 +70,23 @@ export default function TaskDetailModal({ task: initialTask, onClose, onUpdate }
     }
   );
   const [saving, setSaving] = useState(false);
+  const [changeHistory, setChangeHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchHistory = async () => {
+      try {
+        setHistoryLoading(true);
+        const data = await tasksService.getChangeHistory(task.id);
+        setChangeHistory(Array.isArray(data) ? data : (data.results || []));
+      } catch {
+        // ignore errors silently
+      } finally {
+        setHistoryLoading(false);
+      }
+    };
+    fetchHistory();
+  }, [task.id]);
 
   if (!task) return null;
 
@@ -432,6 +449,45 @@ export default function TaskDetailModal({ task: initialTask, onClose, onUpdate }
               </div>
             </div>
           )}
+
+          {/* Change History */}
+          <div>
+            <h3 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
+              <History className="h-5 w-5 text-blue-600" />
+              Lịch sử thay đổi
+            </h3>
+            {historyLoading ? (
+              <div className="text-center py-6 text-gray-400">Đang tải...</div>
+            ) : changeHistory.length === 0 ? (
+              <div className="text-center py-6 text-gray-400 bg-gray-50 rounded-lg">Chưa có lịch sử thay đổi</div>
+            ) : (
+              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                {changeHistory.map((item) => (
+                  <div key={item.id} className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-semibold text-gray-800">
+                        {item.changed_by_full_name || item.changed_by_username || 'Hệ thống'}
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        {new Date(item.changed_at).toLocaleString('vi-VN')}
+                      </span>
+                    </div>
+                    {item.change_note ? (
+                      <p className="text-gray-600">{item.change_note}</p>
+                    ) : (
+                      <p className="text-gray-600">
+                        <span className="font-medium text-blue-700">{item.field_name}</span>
+                        {': '}
+                        <span className="line-through text-red-500">{item.old_value || '(trống)'}</span>
+                        {' → '}
+                        <span className="text-green-600">{item.new_value || '(trống)'}</span>
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Footer */}

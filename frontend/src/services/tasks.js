@@ -308,6 +308,11 @@ export const tasksService = {
   async getMyTasks(params = {}) {
     const response = await api.get('/tasks/my-tasks/', { params });
     return response.data;
+  },
+
+  async getChangeHistory(taskId) {
+    const response = await api.get(`/tasks/${taskId}/change_history/`);
+    return response.data;
   }
 };
 
