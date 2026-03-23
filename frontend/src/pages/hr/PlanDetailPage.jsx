@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Calendar, Target, CheckCircle2, Clock, FileText, Plus, Link2 } from 'lucide-react';
+import { ArrowLeft, Calendar, Target, CheckCircle2, Clock, FileText, Plus, Link2, FolderPlus, Search, X } from 'lucide-react';
 import { toast } from 'sonner';
 import plansService from '../../services/plans';
 import tasksService from '../../services/tasks';
@@ -16,20 +16,18 @@ export default function PlanDetailPage() {
   const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(true);
   const [projects, setProjects] = useState([]);
-  const [projectTasks, setProjectTasks] = useState([]);
   const [linkProjectTasks, setLinkProjectTasks] = useState([]);
+  const [loadingTasks, setLoadingTasks] = useState(false);
   const [savingGoal, setSavingGoal] = useState(false);
   const [savingNote, setSavingNote] = useState(false);
   const [savingTask, setSavingTask] = useState(false);
-  const [savingLinkTask, setSavingLinkTask] = useState(false);
-  const [taskMode, setTaskMode] = useState('create');
+  const [taskMode, setTaskMode] = useState('link'); // 'link' | 'create'
+  const [taskProjectMode, setTaskProjectMode] = useState('existing'); // 'existing' | 'new'
 
   const [goalForm, setGoalForm] = useState({
     title: '',
     description: '',
     priority: 'medium',
-    related_project: '',
-    related_task: ''
   });
 
   const [noteText, setNoteText] = useState('');
@@ -42,12 +40,15 @@ export default function PlanDetailPage() {
     due_date: ''
   });
 
+  const [newProjectForm, setNewProjectForm] = useState({
+    name: '',
+    start_date: '',
+    end_date: ''
+  });
+
   const [linkTaskForm, setLinkTaskForm] = useState({
     project: '',
     task_id: '',
-    goal_title: '',
-    goal_description: '',
-    priority: 'medium'
   });
 
   const canCreateTask = ['admin', 'manager', 'team_lead', 'staff'].includes(user?.role);
@@ -79,29 +80,10 @@ export default function PlanDetailPage() {
     }
   };
 
-  const fetchTasksByProject = async (projectId) => {
-    if (!projectId) {
-      setProjectTasks([]);
-      return;
-    }
-
-    try {
-      const data = await tasksService.getTasks({ project: projectId });
-      setProjectTasks(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error('Error fetching project tasks:', error);
-      setProjectTasks([]);
-    }
-  };
-
   useEffect(() => {
     fetchDetail();
     fetchProjects();
   }, [id]);
-
-  useEffect(() => {
-    fetchTasksByProject(goalForm.related_project);
-  }, [goalForm.related_project]);
 
   useEffect(() => {
     const fetchLinkTasks = async () => {
@@ -109,16 +91,17 @@ export default function PlanDetailPage() {
         setLinkProjectTasks([]);
         return;
       }
-
       try {
-        const data = await tasksService.getTasks({ project: linkTaskForm.project });
-        setLinkProjectTasks(Array.isArray(data) ? data : []);
+        setLoadingTasks(true);
+        const data = await tasksService.getTasks({ project: linkTaskForm.project, page_size: 100 });
+        setLinkProjectTasks(Array.isArray(data) ? data : (data?.results || []));
       } catch (error) {
         console.error('Error fetching existing tasks:', error);
         setLinkProjectTasks([]);
+      } finally {
+        setLoadingTasks(false);
       }
     };
-
     fetchLinkTasks();
   }, [linkTaskForm.project]);
 
@@ -136,18 +119,9 @@ export default function PlanDetailPage() {
         title: goalForm.title,
         description: goalForm.description,
         priority: goalForm.priority,
-        related_project: goalForm.related_project ? Number(goalForm.related_project) : null,
-        related_task: goalForm.related_task ? Number(goalForm.related_task) : null
       });
 
-      setGoalForm({
-        title: '',
-        description: '',
-        priority: 'medium',
-        related_project: '',
-        related_task: ''
-      });
-      setProjectTasks([]);
+      setGoalForm({ title: '', description: '', priority: 'medium' });
       toast.success('Goal added successfully');
       await fetchDetail();
     } catch (error) {
@@ -178,6 +152,7 @@ export default function PlanDetailPage() {
     }
   };
 
+  // Create new task (in existing or new project) and link as goal
   const handleAddTask = async (e) => {
     e.preventDefault();
 
@@ -186,19 +161,43 @@ export default function PlanDetailPage() {
       return;
     }
 
-    if (!taskForm.title.trim() || !taskForm.description.trim() || !taskForm.project) {
-      toast.error('Please fill title, description, and project');
+    if (!taskForm.title.trim()) {
+      toast.error('Please enter task title');
       return;
     }
 
     try {
       setSavingTask(true);
+      let projectId;
+
+      if (taskProjectMode === 'new') {
+        // Create new project first
+        if (!newProjectForm.name.trim() || !newProjectForm.start_date || !newProjectForm.end_date) {
+          toast.error('Please fill in new project name, start date and end date');
+          return;
+        }
+        const newProject = await projectsService.createProject({
+          name: newProjectForm.name.trim(),
+          start_date: newProjectForm.start_date,
+          end_date: newProjectForm.end_date,
+        });
+        projectId = newProject.id;
+        await fetchProjects();
+        toast.success(`Project "${newProject.name}" created`);
+      } else {
+        if (!taskForm.project) {
+          toast.error('Please select a project');
+          return;
+        }
+        projectId = Number(taskForm.project);
+      }
+
       const dueDateValue = taskForm.due_date ? `${taskForm.due_date}T23:59:00` : null;
 
       const createdTask = await tasksService.createTask({
         title: taskForm.title,
         description: taskForm.description,
-        project: Number(taskForm.project),
+        project: projectId,
         priority: taskForm.priority,
         due_date: dueDateValue,
       });
@@ -207,69 +206,60 @@ export default function PlanDetailPage() {
         title: taskForm.title,
         description: taskForm.description,
         priority: mapTaskPriorityToGoalPriority(taskForm.priority),
-        related_project: Number(taskForm.project),
+        related_project: projectId,
         related_task: createdTask.id
       });
 
-      setTaskForm({
-        title: '',
-        description: '',
-        project: '',
-        priority: 'medium',
-        due_date: ''
-      });
+      setTaskForm({ title: '', description: '', project: '', priority: 'medium', due_date: '' });
+      setNewProjectForm({ name: '', start_date: '', end_date: '' });
+      setTaskProjectMode('existing');
 
       toast.success('Task created and linked to this plan');
       await fetchDetail();
     } catch (error) {
       console.error('Error adding task:', error);
-      toast.error(error.response?.data?.error || 'Failed to create task');
+      const errMsg = error.response?.data?.detail || error.response?.data?.error || 'Failed to create task';
+      toast.error(errMsg);
     } finally {
       setSavingTask(false);
     }
   };
 
+  // Link an existing task as a goal in this plan
   const handleLinkExistingTask = async (e) => {
     e.preventDefault();
 
     if (!linkTaskForm.project || !linkTaskForm.task_id) {
-      toast.error('Please select project and existing task');
+      toast.error('Please select a project and a task');
       return;
     }
 
-    const selectedTask = linkProjectTasks.find(task => String(task.id) === String(linkTaskForm.task_id));
+    const selectedTask = linkProjectTasks.find(t => String(t.id) === String(linkTaskForm.task_id));
     if (!selectedTask) {
       toast.error('Selected task not found');
       return;
     }
 
     try {
-      setSavingLinkTask(true);
-
+      setSavingTask(true);
       await plansService.addGoal(plan.id, {
-        title: linkTaskForm.goal_title?.trim() || selectedTask.title,
-        description: linkTaskForm.goal_description?.trim() || selectedTask.description || '',
-        priority: linkTaskForm.priority || mapTaskPriorityToGoalPriority(selectedTask.priority),
+        title: selectedTask.title,
+        description: selectedTask.description || '',
+        priority: mapTaskPriorityToGoalPriority(selectedTask.priority) || 'medium',
         related_project: Number(linkTaskForm.project),
         related_task: Number(linkTaskForm.task_id)
       });
 
-      setLinkTaskForm({
-        project: '',
-        task_id: '',
-        goal_title: '',
-        goal_description: '',
-        priority: 'medium'
-      });
+      setLinkTaskForm({ project: '', task_id: '' });
       setLinkProjectTasks([]);
 
-      toast.success('Existing task linked to this plan');
+      toast.success('Task linked to this plan');
       await fetchDetail();
     } catch (error) {
       console.error('Error linking existing task:', error);
-      toast.error('Failed to link existing task');
+      toast.error('Failed to link task');
     } finally {
-      setSavingLinkTask(false);
+      setSavingTask(false);
     }
   };
 
@@ -331,31 +321,6 @@ export default function PlanDetailPage() {
               className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 resize-none"
             />
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <select
-                value={goalForm.related_project}
-                onChange={(e) => setGoalForm(prev => ({ ...prev, related_project: e.target.value, related_task: '' }))}
-                className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500"
-              >
-                <option value="">Link project (optional)</option>
-                {projects.map(project => (
-                  <option key={project.id} value={project.id}>{project.name}</option>
-                ))}
-              </select>
-
-              <select
-                value={goalForm.related_task}
-                onChange={(e) => setGoalForm(prev => ({ ...prev, related_task: e.target.value }))}
-                disabled={!goalForm.related_project}
-                className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 disabled:bg-gray-100"
-              >
-                <option value="">Link task (optional)</option>
-                {projectTasks.map(task => (
-                  <option key={task.id} value={task.id}>{task.title}</option>
-                ))}
-              </select>
-            </div>
-
             <button
               type="submit"
               disabled={savingGoal}
@@ -369,27 +334,27 @@ export default function PlanDetailPage() {
           <div className="space-y-2">
             {plan.goals?.length ? plan.goals.map((goal) => (
               <div key={goal.id} className="p-3 rounded-lg border border-gray-200 bg-gray-50">
-                <div className="font-medium text-gray-900">{goal.title}</div>
-                <div className="text-sm text-gray-600">{goal.description || '-'}</div>
-                {(goal.related_task_details || goal.related_project_details) && (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {goal.related_project_details && (
-                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-blue-100 text-blue-700">
-                        <Link2 className="h-3 w-3" />
-                        Project: {goal.related_project_details.name}
-                      </span>
-                    )}
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="font-medium text-gray-900">{goal.title}</div>
+                    {goal.description && <div className="text-sm text-gray-600 mt-0.5">{goal.description}</div>}
                     {goal.related_task_details && (
                       <button
                         onClick={() => navigate(`/tasks/${goal.related_task_details.id}`)}
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-purple-100 text-purple-700 hover:bg-purple-200"
+                        className="mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-purple-100 text-purple-700 hover:bg-purple-200"
                       >
                         <Link2 className="h-3 w-3" />
                         Task: {goal.related_task_details.title}
                       </button>
                     )}
                   </div>
-                )}
+                  <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${
+                    goal.priority === 'critical' ? 'bg-red-100 text-red-700' :
+                    goal.priority === 'high' ? 'bg-orange-100 text-orange-700' :
+                    goal.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                    'bg-gray-100 text-gray-600'
+                  }`}>{goal.priority}</span>
+                </div>
               </div>
             )) : <p className="text-gray-500">No goals yet.</p>}
           </div>
@@ -425,153 +390,237 @@ export default function PlanDetailPage() {
           </div>
         </div>
 
+        {/* Add Task to Plan */}
         <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Add Task (Linked to Project)</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-1">Add Task to Plan</h3>
+          <p className="text-sm text-gray-500 mb-4">Link an existing project task or create a new task and add it to this plan.</p>
 
           {!canCreateTask ? (
-            <p className="text-sm text-gray-600">You do not have permission to add tasks. Please ask Manager/Admin.</p>
+            <p className="text-sm text-gray-600 bg-yellow-50 border border-yellow-200 rounded-lg p-3">You do not have permission to add tasks. Please ask your Manager/Admin.</p>
           ) : (
             <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setTaskMode('create')}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
-                    taskMode === 'create' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-700'
-                  }`}
-                >
-                  Create New Task
-                </button>
+              {/* Mode tabs */}
+              <div className="flex items-center gap-2 p-1 bg-gray-100 rounded-xl w-fit">
                 <button
                   type="button"
                   onClick={() => setTaskMode('link')}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
-                    taskMode === 'link' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-700'
+                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    taskMode === 'link' ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-600 hover:text-gray-800'
                   }`}
                 >
+                  <Link2 className="h-4 w-4" />
                   Link Existing Task
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTaskMode('create')}
+                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    taskMode === 'create' ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-600 hover:text-gray-800'
+                  }`}
+                >
+                  <Plus className="h-4 w-4" />
+                  Create New Task
                 </button>
               </div>
 
-              {taskMode === 'create' ? (
-                <form onSubmit={handleAddTask} className="space-y-3">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <input
-                      type="text"
-                      value={taskForm.title}
-                      onChange={(e) => setTaskForm(prev => ({ ...prev, title: e.target.value }))}
-                      placeholder="Task title"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
-                    />
+              {/* ── Link Existing Task ── */}
+              {taskMode === 'link' && (
+                <form onSubmit={handleLinkExistingTask} className="space-y-4 p-4 bg-purple-50/60 rounded-xl border border-purple-100">
+                  {/* Step 1: Select project */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">1. Select project</label>
                     <select
-                      value={taskForm.project}
-                      onChange={(e) => setTaskForm(prev => ({ ...prev, project: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                      value={linkTaskForm.project}
+                      onChange={(e) => setLinkTaskForm({ project: e.target.value, task_id: '' })}
+                      className="w-full px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 bg-white"
                     >
-                      <option value="">Select project</option>
-                      {projects.map(project => (
-                        <option key={project.id} value={project.id}>{project.name}</option>
+                      <option value="">— Choose a project —</option>
+                      {projects.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
                       ))}
                     </select>
                   </div>
 
-                  <textarea
-                    value={taskForm.description}
-                    onChange={(e) => setTaskForm(prev => ({ ...prev, description: e.target.value }))}
-                    rows={3}
-                    placeholder="Task description"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 resize-none"
-                  />
+                  {/* Step 2: Task list (card selection) */}
+                  {linkTaskForm.project && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        2. Select task
+                        {loadingTasks && <span className="ml-2 text-xs text-gray-400">Loading...</span>}
+                      </label>
+                      {!loadingTasks && linkProjectTasks.length === 0 ? (
+                        <p className="text-sm text-gray-500 italic bg-white rounded-lg p-3 border border-gray-200">No tasks found in this project.</p>
+                      ) : (
+                        <div className="max-h-56 overflow-y-auto space-y-1.5 pr-1">
+                          {linkProjectTasks.map(task => (
+                            <div
+                              key={task.id}
+                              onClick={() => setLinkTaskForm(prev => ({ ...prev, task_id: String(task.id) }))}
+                              className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                                linkTaskForm.task_id === String(task.id)
+                                  ? 'border-purple-500 bg-purple-50 shadow-sm'
+                                  : 'border-gray-200 bg-white hover:border-purple-300 hover:bg-purple-50/30'
+                              }`}
+                            >
+                              <div className={`mt-0.5 h-4 w-4 shrink-0 rounded-full border-2 flex items-center justify-center ${
+                                linkTaskForm.task_id === String(task.id) ? 'border-purple-600 bg-purple-600' : 'border-gray-300'
+                              }`}>
+                                {linkTaskForm.task_id === String(task.id) && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium text-sm text-gray-900 truncate">{task.title}</div>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className={`text-xs px-1.5 py-0.5 rounded ${
+                                    task.status === 'completed' ? 'bg-green-100 text-green-700' :
+                                    task.status === 'in_progress' || task.status === 'working' ? 'bg-blue-100 text-blue-700' :
+                                    'bg-gray-100 text-gray-600'
+                                  }`}>{task.status}</span>
+                                  <span className="text-xs text-gray-400">{task.priority}</span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
+                  <button
+                    type="submit"
+                    disabled={savingTask || !linkTaskForm.task_id}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
+                  >
+                    <Link2 className="h-4 w-4" />
+                    {savingTask ? 'Linking...' : 'Link Task to Plan'}
+                  </button>
+                </form>
+              )}
+
+              {/* ── Create New Task ── */}
+              {taskMode === 'create' && (
+                <form onSubmit={handleAddTask} className="space-y-4 p-4 bg-indigo-50/60 rounded-xl border border-indigo-100">
+                  {/* Project mode toggle */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Project</label>
+                    <div className="flex items-center gap-3 mb-3">
+                      <button
+                        type="button"
+                        onClick={() => setTaskProjectMode('existing')}
+                        className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-all ${
+                          taskProjectMode === 'existing' ? 'border-indigo-500 bg-indigo-600 text-white' : 'border-gray-300 text-gray-600 hover:border-indigo-400'
+                        }`}
+                      >Existing Project</button>
+                      <button
+                        type="button"
+                        onClick={() => setTaskProjectMode('new')}
+                        className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border font-medium transition-all ${
+                          taskProjectMode === 'new' ? 'border-indigo-500 bg-indigo-600 text-white' : 'border-gray-300 text-gray-600 hover:border-indigo-400'
+                        }`}
+                      >
+                        <FolderPlus className="h-3 w-3" /> New Project
+                      </button>
+                    </div>
+
+                    {taskProjectMode === 'existing' ? (
+                      <select
+                        value={taskForm.project}
+                        onChange={(e) => setTaskForm(prev => ({ ...prev, project: e.target.value }))}
+                        className="w-full px-3 py-2 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white"
+                      >
+                        <option value="">— Select project —</option>
+                        {projects.map(p => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="space-y-2 p-3 bg-white rounded-lg border border-indigo-200">
+                        <p className="text-xs text-indigo-600 font-medium">New project details</p>
+                        <input
+                          type="text"
+                          value={newProjectForm.name}
+                          onChange={(e) => setNewProjectForm(prev => ({ ...prev, name: e.target.value }))}
+                          placeholder="Project name *"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+                        />
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-xs text-gray-500">Start date *</label>
+                            <input
+                              type="date"
+                              value={newProjectForm.start_date}
+                              onChange={(e) => setNewProjectForm(prev => ({ ...prev, start_date: e.target.value }))}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs text-gray-500">End date *</label>
+                            <input
+                              type="date"
+                              value={newProjectForm.end_date}
+                              onChange={(e) => setNewProjectForm(prev => ({ ...prev, end_date: e.target.value }))}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Task fields */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <select
-                      value={taskForm.priority}
-                      onChange={(e) => setTaskForm(prev => ({ ...prev, priority: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
-                    >
-                      <option value="low">Low</option>
-                      <option value="medium">Medium</option>
-                      <option value="high">High</option>
-                      <option value="urgent">Urgent</option>
-                    </select>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Task title *</label>
+                      <input
+                        type="text"
+                        value={taskForm.title}
+                        onChange={(e) => setTaskForm(prev => ({ ...prev, title: e.target.value }))}
+                        placeholder="Enter task title"
+                        className="w-full px-3 py-2 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Priority</label>
+                      <select
+                        value={taskForm.priority}
+                        onChange={(e) => setTaskForm(prev => ({ ...prev, priority: e.target.value }))}
+                        className="w-full px-3 py-2 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white"
+                      >
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                        <option value="urgent">Urgent</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Description</label>
+                    <textarea
+                      value={taskForm.description}
+                      onChange={(e) => setTaskForm(prev => ({ ...prev, description: e.target.value }))}
+                      rows={2}
+                      placeholder="Task description (optional)"
+                      className="w-full px-3 py-2 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 resize-none bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">Due date</label>
                     <input
                       type="date"
                       value={taskForm.due_date}
                       onChange={(e) => setTaskForm(prev => ({ ...prev, due_date: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                      className="w-full px-3 py-2 border border-indigo-200 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white"
                     />
                   </div>
 
                   <button
                     type="submit"
                     disabled={savingTask}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-60"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
                   >
                     <Plus className="h-4 w-4" />
-                    {savingTask ? 'Creating Task...' : 'Add Task to Plan'}
-                  </button>
-                </form>
-              ) : (
-                <form onSubmit={handleLinkExistingTask} className="space-y-3">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <select
-                      value={linkTaskForm.project}
-                      onChange={(e) => setLinkTaskForm(prev => ({ ...prev, project: e.target.value, task_id: '' }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
-                    >
-                      <option value="">Select project</option>
-                      {projects.map(project => (
-                        <option key={project.id} value={project.id}>{project.name}</option>
-                      ))}
-                    </select>
-                    <select
-                      value={linkTaskForm.task_id}
-                      onChange={(e) => setLinkTaskForm(prev => ({ ...prev, task_id: e.target.value }))}
-                      disabled={!linkTaskForm.project}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 disabled:bg-gray-100"
-                    >
-                      <option value="">Select existing task</option>
-                      {linkProjectTasks.map(task => (
-                        <option key={task.id} value={task.id}>{task.title}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <input
-                      type="text"
-                      value={linkTaskForm.goal_title}
-                      onChange={(e) => setLinkTaskForm(prev => ({ ...prev, goal_title: e.target.value }))}
-                      placeholder="Goal title override (optional)"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
-                    />
-                    <select
-                      value={linkTaskForm.priority}
-                      onChange={(e) => setLinkTaskForm(prev => ({ ...prev, priority: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
-                    >
-                      <option value="low">Low</option>
-                      <option value="medium">Medium</option>
-                      <option value="high">High</option>
-                      <option value="critical">Critical</option>
-                    </select>
-                  </div>
-
-                  <textarea
-                    value={linkTaskForm.goal_description}
-                    onChange={(e) => setLinkTaskForm(prev => ({ ...prev, goal_description: e.target.value }))}
-                    rows={3}
-                    placeholder="Goal description override (optional)"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 resize-none"
-                  />
-
-                  <button
-                    type="submit"
-                    disabled={savingLinkTask}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-60"
-                  >
-                    <Link2 className="h-4 w-4" />
-                    {savingLinkTask ? 'Linking Task...' : 'Link Task to Plan'}
+                    {savingTask ? (taskProjectMode === 'new' ? 'Creating project & task...' : 'Creating task...') : 'Add Task to Plan'}
                   </button>
                 </form>
               )}
