@@ -40,6 +40,11 @@ export default function TaskDetailPage() {
   const [changeHistory, setChangeHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
+  // Reference file upload (edit mode)
+  const [refUploadFile, setRefUploadFile] = useState(null);
+  const [refUploadComment, setRefUploadComment] = useState('');
+  const [refUploadLoading, setRefUploadLoading] = useState(false);
+
   const canAssignReviewer = ['admin', 'manager'].includes(user?.role);
   const isReviewerRole = ['admin', 'manager', 'team_lead', 'staff'].includes(user?.role);
 
@@ -293,6 +298,27 @@ export default function TaskDetailPage() {
     }
   };
 
+  const handleRefFileUpload = async (e) => {
+    e.preventDefault();
+    if (!refUploadFile) return;
+    try {
+      setRefUploadLoading(true);
+      await taskFilesService.uploadFile(id, {
+        file: refUploadFile,
+        file_type: 'reference',
+        comment: refUploadComment,
+      });
+      toast.success('Reference file uploaded');
+      setRefUploadFile(null);
+      setRefUploadComment('');
+      await fetchTask();
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Failed to upload file');
+    } finally {
+      setRefUploadLoading(false);
+    }
+  };
+
   const handleSaveEdit = async () => {
     try {
       setEditSaving(true);
@@ -327,197 +353,153 @@ export default function TaskDetailPage() {
   const comments = Array.isArray(task.comments) ? task.comments : [];
   const resources = Array.isArray(task.resources) ? task.resources : [];
   const uploads = Array.isArray(task.uploads) ? task.uploads : [];
-  const canUploadFiles = isAssignedFreelancer || ['admin', 'manager'].includes(user?.role);
   const canEdit = ['admin', 'manager', 'staff', 'team_lead'].includes(user?.role);
+  const canUploadFiles = canEdit || isAssignedFreelancer;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-6">
       <div className="space-y-6">
-        <button onClick={() => navigate('/tasks')} className="inline-flex items-center gap-2 text-indigo-600 hover:text-indigo-700 font-medium">
-          <ArrowLeft className="h-4 w-4" /> Back to Tasks
-        </button>
-
-        <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg">
-          <div className="flex items-start justify-between mb-2">
-            <h1 className="text-3xl font-bold text-gray-900">{task.title}</h1>
-            {canEdit && !editMode && (
-              <button
-                onClick={() => setEditMode(true)}
-                className="flex items-center gap-1 px-3 py-1.5 text-sm bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition-colors"
-              >
-                <Edit2 className="h-4 w-4" /> Edit
+        {/* Top bar */}
+        <div className="flex items-center justify-between">
+          <button onClick={() => navigate('/tasks')} className="inline-flex items-center gap-2 text-indigo-600 hover:text-indigo-700 font-medium">
+            <ArrowLeft className="h-4 w-4" /> Back to Tasks
+          </button>
+          {canEdit && (
+            editMode ? (
+              <div className="flex gap-2">
+                <button onClick={() => setEditMode(false)} className="flex items-center gap-1 px-4 py-2 text-sm border border-gray-300 bg-white rounded-lg hover:bg-gray-50 shadow-sm">
+                  <X className="h-4 w-4" /> Cancel
+                </button>
+                <button onClick={handleSaveEdit} disabled={editSaving} className="flex items-center gap-1 px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 shadow-sm">
+                  <Save className="h-4 w-4" /> {editSaving ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            ) : (
+              <button onClick={() => setEditMode(true)} className="flex items-center gap-1 px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-sm">
+                <Edit2 className="h-4 w-4" /> Edit Task
               </button>
-            )}
-          </div>
-          <p className="text-gray-600 mt-2 whitespace-pre-line">{task.description || 'No description'}</p>
+            )
+          )}
         </div>
 
-        {/* Edit Form */}
-        {canEdit && editMode && (
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-indigo-200 shadow-lg space-y-4">
-            <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-              <Edit2 className="h-5 w-5 text-indigo-600" /> Edit Task
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
-                <input
-                  type="text"
-                  value={editForm.title}
-                  onChange={(e) => setEditForm(f => ({ ...f, title: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                <textarea
-                  rows={3}
-                  value={editForm.description}
-                  onChange={(e) => setEditForm(f => ({ ...f, description: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
-                <select
-                  value={editForm.priority}
-                  onChange={(e) => setEditForm(f => ({ ...f, priority: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                >
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                  <option value="urgent">Urgent</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                <select
-                  value={editForm.status}
-                  onChange={(e) => setEditForm(f => ({ ...f, status: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                >
-                  <option value="new">New</option>
-                  <option value="assigned">Assigned</option>
-                  <option value="working">Working</option>
-                  <option value="review_pending">Review Pending</option>
-                  <option value="approved">Approved</option>
-                  <option value="rejected">Rejected</option>
-                  <option value="completed">Completed</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Stage</label>
-                <select
-                  value={editForm.stage}
-                  onChange={(e) => setEditForm(f => ({ ...f, stage: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                >
-                  <option value="planning">Planning</option>
-                  <option value="design">Design</option>
-                  <option value="development">Development</option>
-                  <option value="review">Review</option>
-                  <option value="testing">Testing</option>
-                  <option value="completed">Completed</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
-                <input
-                  type="date"
-                  value={editForm.due_date}
-                  onChange={(e) => setEditForm(f => ({ ...f, due_date: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Assigned To</label>
-                <select
-                  value={editForm.assigned_to}
-                  onChange={(e) => setEditForm(f => ({ ...f, assigned_to: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                >
-                  <option value="">-- Unassigned --</option>
-                  {allUsers.map(u => (
-                    <option key={u.id} value={String(u.id)}>
-                      {(u.first_name || u.last_name) ? `${u.first_name || ''} ${u.last_name || ''}`.trim() : u.username} ({u.role})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Price</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="1000"
-                  value={editForm.price}
-                  onChange={(e) => setEditForm(f => ({ ...f, price: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                  placeholder="0"
-                />
-              </div>
-            </div>
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setEditMode(false)}
-                className="flex items-center gap-1 px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                <X className="h-4 w-4" /> Cancel
-              </button>
-              <button
-                onClick={handleSaveEdit}
-                disabled={editSaving}
-                className="flex items-center gap-1 px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
-              >
-                <Save className="h-4 w-4" /> {editSaving ? 'Saving...' : 'Save Changes'}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {!editMode && (
-        <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg grid grid-cols-1 md:grid-cols-2 gap-5">
-          <Info icon={Target} label="Project" value={task.project_name || '-'} />
-          <Info icon={Clock} label="Status" value={task.status_display || task.status || '-'} />
-          <Info icon={Flag} label="Priority" value={task.priority_display || task.priority || '-'} />
-          <Info icon={User} label="Assigned To" value={getTaskAssigneeName(task) || 'Unassigned'} />
-          <Info icon={User} label="Assigned By" value={task.assigned_by_username || '-'} />
-          <Info icon={User} label="Reviewer" value={task.reviewer_full_name || task.reviewer_username || '-'} />
-          <Info icon={DollarSign} label="Price" value={task.price ? formatCurrency(Number(task.price)) : '-'} />
-          <Info icon={Calendar} label="Due Date" value={task.due_date ? new Date(task.due_date).toLocaleDateString() : '-'} />
-          <Info icon={Calendar} label="Created" value={task.created_at ? new Date(task.created_at).toLocaleString() : '-'} />
-          <Info icon={DollarSign} label="Freelancer Earning" value={formatCurrency(Number(task.freelancer_earning || 0))} />
+        {/* Title & Description */}
+        <div className={`bg-white/80 backdrop-blur-sm rounded-2xl p-6 border shadow-lg ${editMode ? 'border-indigo-200' : 'border-white/20'}`}>
+          {editMode ? (
+            <input
+              type="text"
+              value={editForm.title}
+              onChange={(e) => setEditForm(f => ({ ...f, title: e.target.value }))}
+              className="w-full text-2xl font-bold text-gray-900 bg-transparent border-b-2 border-indigo-200 focus:border-indigo-500 focus:outline-none mb-3 pb-1"
+            />
+          ) : (
+            <h1 className="text-2xl font-bold text-gray-900 mb-3">{task.title}</h1>
+          )}
+          {editMode ? (
+            <textarea
+              rows={3}
+              value={editForm.description}
+              onChange={(e) => setEditForm(f => ({ ...f, description: e.target.value }))}
+              className="w-full text-gray-700 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-400 resize-none text-sm"
+              placeholder="Description..."
+            />
+          ) : (
+            <p className="text-gray-600 whitespace-pre-line text-sm">{task.description || 'No description'}</p>
+          )}
         </div>
-        )}
 
-        {/* Task Resources */}
-        <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg">
+        {/* Info Grid - inline editable */}
+        <div className={`bg-white/80 backdrop-blur-sm rounded-2xl p-6 border shadow-lg grid grid-cols-1 md:grid-cols-2 gap-5 ${editMode ? 'border-indigo-200' : 'border-white/20'}`}>
+          <InfoField icon={Target} label="Project" value={task.project_name || '-'} />
+          <InfoField icon={Clock} label="Status" value={task.status_display || task.status || '-'} editMode={editMode}>
+            <select value={editForm.status} onChange={(e) => setEditForm(f => ({ ...f, status: e.target.value }))} className="w-full text-sm font-medium text-gray-900 border border-gray-200 rounded-lg px-2 py-1.5">
+              <option value="new">New</option>
+              <option value="assigned">Assigned</option>
+              <option value="working">Working</option>
+              <option value="review_pending">Review Pending</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+              <option value="completed">Completed</option>
+            </select>
+          </InfoField>
+          <InfoField icon={Flag} label="Priority" value={task.priority_display || task.priority || '-'} editMode={editMode}>
+            <select value={editForm.priority} onChange={(e) => setEditForm(f => ({ ...f, priority: e.target.value }))} className="w-full text-sm font-medium text-gray-900 border border-gray-200 rounded-lg px-2 py-1.5">
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+              <option value="urgent">Urgent</option>
+            </select>
+          </InfoField>
+          <InfoField icon={User} label="Assigned To" value={getTaskAssigneeName(task) || 'Unassigned'} editMode={editMode}>
+            <select value={editForm.assigned_to} onChange={(e) => setEditForm(f => ({ ...f, assigned_to: e.target.value }))} className="w-full text-sm font-medium text-gray-900 border border-gray-200 rounded-lg px-2 py-1.5">
+              <option value="">-- Unassigned --</option>
+              {allUsers.map(u => (
+                <option key={u.id} value={String(u.id)}>
+                  {(u.first_name || u.last_name) ? `${u.first_name || ''} ${u.last_name || ''}`.trim() : u.username} ({u.role})
+                </option>
+              ))}
+            </select>
+          </InfoField>
+          <InfoField icon={User} label="Assigned By" value={task.assigned_by_username || '-'} />
+          <InfoField icon={User} label="Reviewer" value={task.reviewer_full_name || task.reviewer_username || '-'} />
+          <InfoField icon={DollarSign} label="Price" value={task.price ? formatCurrency(Number(task.price)) : '-'} editMode={editMode}>
+            <input type="number" min="0" step="1000" value={editForm.price} onChange={(e) => setEditForm(f => ({ ...f, price: e.target.value }))} className="w-full text-sm font-medium text-gray-900 border border-gray-200 rounded-lg px-2 py-1.5" placeholder="0" />
+          </InfoField>
+          <InfoField icon={Calendar} label="Due Date" value={task.due_date ? new Date(task.due_date).toLocaleDateString() : '-'} editMode={editMode}>
+            <input type="date" value={editForm.due_date} onChange={(e) => setEditForm(f => ({ ...f, due_date: e.target.value }))} className="w-full text-sm font-medium text-gray-900 border border-gray-200 rounded-lg px-2 py-1.5" />
+          </InfoField>
+          <InfoField icon={Flag} label="Stage" value={task.stage_display || task.stage || '-'} editMode={editMode}>
+            <select value={editForm.stage} onChange={(e) => setEditForm(f => ({ ...f, stage: e.target.value }))} className="w-full text-sm font-medium text-gray-900 border border-gray-200 rounded-lg px-2 py-1.5">
+              <option value="planning">Planning</option>
+              <option value="design">Design</option>
+              <option value="development">Development</option>
+              <option value="review">Review</option>
+              <option value="testing">Testing</option>
+              <option value="completed">Completed</option>
+            </select>
+          </InfoField>
+          <InfoField icon={Calendar} label="Created" value={task.created_at ? new Date(task.created_at).toLocaleString() : '-'} />
+          <InfoField icon={DollarSign} label="Freelancer Earning" value={formatCurrency(Number(task.freelancer_earning || 0))} />
+        </div>
+
+        {/* Reference Documents */}
+        <div className={`bg-white/80 backdrop-blur-sm rounded-2xl p-6 border shadow-lg ${editMode ? 'border-indigo-200' : 'border-white/20'}`}>
           <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
             <FileText className="h-5 w-5" />
-            Tài liệu tham khảo
+            Reference Documents
           </h3>
+          {editMode && (
+            <form onSubmit={handleRefFileUpload} className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+              <div className="flex flex-wrap gap-3 items-end">
+                <div className="flex-1 min-w-[180px]">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Select file</label>
+                  <input type="file" onChange={(e) => setRefUploadFile(e.target.files?.[0] || null)} className="w-full text-sm" required />
+                </div>
+                <div className="flex-1 min-w-[150px]">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Note (optional)</label>
+                  <input type="text" value={refUploadComment} onChange={(e) => setRefUploadComment(e.target.value)} className="w-full px-2 py-1 border border-gray-300 rounded text-sm" placeholder="Add note..." />
+                </div>
+                <button type="submit" disabled={refUploadLoading} className="px-3 py-1.5 bg-indigo-600 text-white rounded text-sm hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1 whitespace-nowrap">
+                  <Upload className="h-3.5 w-3.5" /> {refUploadLoading ? 'Uploading...' : 'Upload'}
+                </button>
+              </div>
+            </form>
+          )}
           {resources.length === 0 ? (
-            <p className="text-sm text-gray-500">Chưa có tài liệu tham khảo</p>
+            <p className="text-sm text-gray-500">No reference documents</p>
           ) : (
             <div className="space-y-2">
               {resources.map((file) => (
-                <FileItem
-                  key={file.id}
-                  file={file}
-                  onDelete={handleFileDelete}
-                  currentUserId={user?.id}
-                />
+                <FileItem key={file.id} file={file} onDelete={handleFileDelete} currentUserId={user?.id} canEditAll={editMode && canEdit} />
               ))}
             </div>
           )}
         </div>
 
-        {/* Task Uploads */}
-        <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 border border-white/20 shadow-lg">
+        {/* Work Files */}
+        <div className={`bg-white/80 backdrop-blur-sm rounded-2xl p-6 border shadow-lg ${editMode ? 'border-indigo-200' : 'border-white/20'}`}>
           <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
             <Upload className="h-5 w-5" />
-            File bài làm / Kết quả
+            Work Files / Results
           </h3>
 
           {canUploadFiles && (
@@ -525,45 +507,26 @@ export default function TaskDetailPage() {
               <div className="space-y-3">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Chọn file</label>
-                    <input
-                      type="file"
-                      onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                      required
-                    />
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Select file</label>
+                    <input type="file" onChange={(e) => setUploadFile(e.target.files?.[0] || null)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" required />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Loại file</label>
-                    <select
-                      value={uploadFileType}
-                      onChange={(e) => setUploadFileType(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                    >
-                      <option value="submission">Bài làm</option>
-                      <option value="revision">File sửa</option>
-                      <option value="other">Khác</option>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">File type</label>
+                    <select value={uploadFileType} onChange={(e) => setUploadFileType(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                      <option value="submission">Submission</option>
+                      <option value="revision">Revision</option>
+                      <option value="other">Other</option>
                     </select>
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Ghi chú (tùy chọn)</label>
-                  <textarea
-                    rows={2}
-                    value={uploadComment}
-                    onChange={(e) => setUploadComment(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                    placeholder="Thêm ghi chú về file này..."
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Note (optional)</label>
+                  <textarea rows={2} value={uploadComment} onChange={(e) => setUploadComment(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Add note about this file..." />
                 </div>
                 <div className="flex justify-end">
-                  <button
-                    type="submit"
-                    disabled={uploadLoading}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
-                  >
+                  <button type="submit" disabled={uploadLoading} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
                     <Upload className="h-4 w-4" />
-                    {uploadLoading ? 'Đang upload...' : 'Upload File'}
+                    {uploadLoading ? 'Uploading...' : 'Upload File'}
                   </button>
                 </div>
               </div>
@@ -571,16 +534,11 @@ export default function TaskDetailPage() {
           )}
 
           {uploads.length === 0 ? (
-            <p className="text-sm text-gray-500">Chưa có file bài làm</p>
+            <p className="text-sm text-gray-500">No work files yet</p>
           ) : (
             <div className="space-y-2">
               {uploads.map((file) => (
-                <FileItem
-                  key={file.id}
-                  file={file}
-                  onDelete={handleFileDelete}
-                  currentUserId={user?.id}
-                />
+                <FileItem key={file.id} file={file} onDelete={handleFileDelete} currentUserId={user?.id} canEditAll={editMode && canEdit} />
               ))}
             </div>
           )}
@@ -822,20 +780,20 @@ export default function TaskDetailPage() {
   );
 }
 
-function Info({ icon: Icon, label, value }) {
+function InfoField({ icon: Icon, label, value, editMode = false, children }) {
   return (
-    <div className="flex items-center gap-3">
-      <Icon className="h-5 w-5 text-gray-400" />
-      <div>
-        <p className="text-sm text-gray-600">{label}</p>
-        <p className="font-medium text-gray-900">{value}</p>
+    <div className="flex items-start gap-3">
+      <Icon className="h-5 w-5 text-gray-400 mt-1 flex-shrink-0" />
+      <div className="flex-1 min-w-0">
+        <p className="text-xs text-gray-500 mb-0.5">{label}</p>
+        {editMode && children ? children : <p className="font-medium text-gray-900 text-sm">{value}</p>}
       </div>
     </div>
   );
 }
 
-function FileItem({ file, onDelete, currentUserId }) {
-  const canDelete = currentUserId === file.uploaded_by;
+function FileItem({ file, onDelete, currentUserId, canEditAll = false }) {
+  const canDelete = canEditAll || currentUserId === file.uploaded_by;
   const formatFileSize = (bytes) => {
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
