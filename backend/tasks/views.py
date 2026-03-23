@@ -150,9 +150,13 @@ class TaskViewSet(viewsets.ModelViewSet):
                 Q(assigned_to=user) | Q(assignees=user)
             ).distinct()
         elif user.role == 'staff':
-            # Staff see tasks in projects they're a member of, or tasks directly assigned to them
+            # Staff see tasks in projects they're a member of, or tasks directly assigned to them,
+            # or tasks in projects linked to their department
             return Task.objects.filter(
-                Q(assigned_to=user) | Q(assignees=user) | Q(project__members=user)
+                Q(assigned_to=user) |
+                Q(assignees=user) |
+                Q(project__members=user) |
+                Q(project__departments__employees__user=user)
             ).distinct()
         elif user.role in ['team_lead', 'manager', 'admin'] or user.is_superuser:
             # Team Lead, Manager and Admin see all tasks
